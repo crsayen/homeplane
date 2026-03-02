@@ -1,0 +1,9 @@
+venv
+node_modules/
+__pycache__/
+.pytest_cache/
+frontend/node_modules/
+frontend/dist/
+backend/.env
+frontend/.env
+docker-compose.env

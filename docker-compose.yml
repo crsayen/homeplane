@@ -1,0 +1,48 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - ./backend/.env
+    restart: unless-stopped
+    networks:
+      - homeplane
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_HOMEPLANE_API_URL: ${VITE_HOMEPLANE_API_URL:-}
+        VITE_HOMEPLANE_API_KEY: ${VITE_HOMEPLANE_API_KEY}
+    depends_on:
+      - backend
+    expose:
+      - "80"
+    restart: unless-stopped
+    networks:
+      - homeplane
+
+  caddy:
+    image: caddy:2.8-alpine
+    depends_on:
+      - web
+    env_file:
+      - ./docker-compose.env
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+    networks:
+      - homeplane
+
+networks:
+  homeplane:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

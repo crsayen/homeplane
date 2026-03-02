@@ -1,0 +1,20 @@
+rooms and their entities:
+
+    # garage
+    switch.garage_power
+    number.garage_volume
+    # kitchen
+    switch.kitchen_power
+    number.kitchen_volume
+    # living room
+    switch.living_room_power
+    number.living_room_volume
+    # back yard
+    switch.back_yard_power
+    number.back_yard_volume
+    # casa shea
+    switch.casa_shea_power
+    number.casa_shea_volume
+    # craft zone
+    switch.craftzone_power
+    number.craftzone_volume

@@ -1,0 +1,13 @@
+{
+  "name": "homeplane",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "concurrently -k -n backend,frontend -c green,cyan \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:backend": "bash -lc 'source venv/bin/activate && cd backend && uvicorn app.main:app --reload --port 8080'",
+    "dev:frontend": "npm --prefix frontend run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

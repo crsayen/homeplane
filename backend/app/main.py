@@ -1,0 +1,42 @@
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.routes.orchestration import router as orchestration_router
+from app.core.config import get_settings
+from app.core.rate_limit import InMemoryRateLimiter
+from app.services.ha_client import HomeAssistantClient
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    settings = get_settings()
+
+    app.state.ha_client = HomeAssistantClient(
+        base_url=settings.ha_base_url,
+        token=settings.ha_token,
+    )
+    app.state.rate_limiter = InMemoryRateLimiter(
+        max_requests=settings.rate_limit_requests,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
+
+    yield
+
+    await app.state.ha_client.close()
+
+
+settings = get_settings()
+app = FastAPI(title="Homeplane API", version="0.1.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins,
+    allow_origin_regex=settings.allowed_origin_regex,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(orchestration_router)

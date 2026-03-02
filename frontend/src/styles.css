@@ -1,0 +1,78 @@
+@import url("https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,700&family=Sora:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light dark;
+  }
+
+  body {
+    @apply min-h-screen overflow-x-hidden bg-ink-50 font-sans text-slate-900 antialiased transition-colors duration-300 dark:bg-[#050505] dark:text-slate-100;
+  }
+
+  #root {
+    @apply overflow-x-clip;
+  }
+}
+
+@layer components {
+  .ambient-bg {
+    @apply fixed inset-0 -z-10 overflow-hidden;
+  }
+
+  .ambient-bg::before,
+  .ambient-bg::after {
+    content: "";
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(70px);
+    opacity: 0.5;
+  }
+
+  .ambient-bg::before {
+    width: 42rem;
+    height: 42rem;
+    top: -18rem;
+    left: -12rem;
+    background: radial-gradient(circle, rgba(14, 165, 233, 0.28) 0%, rgba(14, 165, 233, 0) 70%);
+  }
+
+  .ambient-bg::after {
+    width: 34rem;
+    height: 34rem;
+    right: -10rem;
+    bottom: -12rem;
+    background: radial-gradient(circle, rgba(20, 184, 166, 0.24) 0%, rgba(20, 184, 166, 0) 70%);
+  }
+
+  .dark .ambient-bg::before {
+    opacity: 0.24;
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.18) 0%, rgba(56, 189, 248, 0) 70%);
+  }
+
+  .dark .ambient-bg::after {
+    opacity: 0.2;
+    background: radial-gradient(circle, rgba(14, 165, 233, 0.16) 0%, rgba(14, 165, 233, 0) 70%);
+  }
+
+  .volume-slider {
+    @apply h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-300/80 dark:bg-slate-700/80;
+  }
+
+  .volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 9999px;
+    background: linear-gradient(135deg, #06b6d4 0%, #2563eb 100%);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.6);
+  }
+
+  .dark .volume-slider::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.75);
+  }
+}

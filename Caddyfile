@@ -1,0 +1,9 @@
+{
+    # LAN-first TLS using Caddy's internal CA.
+    local_certs
+}
+
+{$HOMEPLANE_HOSTS} {
+    encode zstd gzip
+    reverse_proxy web:80
+}

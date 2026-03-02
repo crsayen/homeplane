@@ -1,1 +1,182 @@
 # homeplane
+
+Starter scaffold for a Home Assistant orchestration facade:
+
+- `backend/`: FastAPI API that holds your Home Assistant token and exposes validated endpoints.
+- `frontend/src/api/homeplaneClient.ts`: Typed client for React apps.
+
+## Backend quick start
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# edit .env with your HA URL/token and app API key
+uvicorn app.main:app --reload --port 8080
+```
+
+## Frontend quick start
+
+```bash
+cd frontend
+npm install
+cp .env.example .env
+# set VITE_HOMEPLANE_API_KEY (and optionally VITE_HOMEPLANE_API_URL)
+npm run dev
+```
+
+## Run locally
+
+Run these in separate terminals:
+
+1. Backend
+```bash
+source /Users/chrissayen/dev/homeplane/venv/bin/activate
+cd /Users/chrissayen/dev/homeplane/backend
+uvicorn app.main:app --reload --port 8080
+```
+2. Frontend
+```bash
+cd /Users/chrissayen/dev/homeplane/frontend
+npm run dev
+```
+
+Open the frontend URL printed by Vite (usually `http://localhost:5173`).
+
+Or from repo root in one command:
+
+```bash
+npm install
+npm run dev
+```
+
+## Docker Deployment (Rack Server)
+
+This repo includes:
+
+- [docker-compose.yml](/Users/chrissayen/dev/homeplane/docker-compose.yml)
+- [Caddyfile](/Users/chrissayen/dev/homeplane/Caddyfile)
+- [backend/Dockerfile](/Users/chrissayen/dev/homeplane/backend/Dockerfile)
+- [frontend/Dockerfile](/Users/chrissayen/dev/homeplane/frontend/Dockerfile)
+- [frontend/nginx.conf](/Users/chrissayen/dev/homeplane/frontend/nginx.conf)
+
+Architecture:
+
+- `caddy` container: host-based routing + TLS termination (LAN certificates)
+- `web` container: serves built React app with Nginx and proxies `/api` + `/api/ws/*` to backend
+- `backend` container: FastAPI/Uvicorn service (internal Docker network only)
+
+### 1. Configure backend secrets
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Edit `backend/.env` with your Home Assistant URL/token and app key.
+
+### 2. Configure frontend build-time env
+
+```bash
+cp docker-compose.env.example docker-compose.env
+```
+
+Edit `docker-compose.env`:
+- `HOMEPLANE_HOSTS` set to your LAN hostname(s), e.g. `homeplane.lan`
+- `VITE_HOMEPLANE_API_KEY` must match backend `APP_API_KEY`
+- `VITE_HOMEPLANE_API_URL` can be left empty to use same-origin
+
+### 3. Configure DNS/hosts for host-based routing
+
+Point your chosen hostname to the server IP on your LAN.
+
+Example `/etc/hosts` entry on a client device:
+
+```text
+192.168.1.50 homeplane.lan
+```
+
+### 4. Build and run
+
+```bash
+docker compose --env-file docker-compose.env up -d --build
+```
+
+### 5. Trust Caddy LAN certificate on clients
+
+Caddy uses an internal CA (`local_certs`) for TLS on LAN hostnames.
+
+Export CA root certificate:
+
+```bash
+docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./caddy-local-root.crt
+```
+
+Install/trust `caddy-local-root.crt` on each client device that will access Homeplane.
+
+### 6. Open app
+
+Browse to `https://<your-hostname>/` (for example `https://homeplane.lan/`).
+
+### 7. Update deployment
+
+```bash
+docker compose --env-file docker-compose.env up -d --build
+```
+
+## Implemented endpoints
+
+All endpoints require `x-homeplane-key` header.
+
+- `POST /api/lights/{entity_id}/toggle`
+- `POST /api/scenes/{entity_id}/activate`
+- `GET /api/entities/{entity_id}/state`
+- `POST /api/switches/{entity_id}/state`
+- `POST /api/numbers/{entity_id}/value`
+- `GET /api/health`
+- `WS /api/ws/entities?api_key=...&entity_ids=switch.a,number.b`
+
+## Notes
+
+- Home Assistant token never leaves the backend.
+- Basic in-memory per-route+API-key rate limiting is enabled.
+- CORS is configured from `ALLOWED_ORIGINS`.
+- Dashboard subscribes to Home Assistant `state_changed` events through backend websocket streaming.
+
+## Multi-Room Audio Dashboard
+
+Use [multi-room-audio.config.json](/Users/chrissayen/dev/homeplane/frontend/public/multi-room-audio.config.json) to define rooms and their entities.
+
+Dashboard component:
+- [MultiRoomAudioDashboard.tsx](/Users/chrissayen/dev/homeplane/frontend/src/components/MultiRoomAudioDashboard.tsx)
+- Tailwind CSS powered, mobile-first layout with light/dark/system theme toggle.
+
+React usage:
+
+```tsx
+import { MultiRoomAudioDashboard } from "./components/MultiRoomAudioDashboard";
+
+export default function App() {
+  return (
+    <MultiRoomAudioDashboard
+      apiBaseUrl={import.meta.env.VITE_HOMEPLANE_API_URL}
+      apiKey={import.meta.env.VITE_HOMEPLANE_API_KEY}
+    />
+  );
+}
+```
+
+Config shape:
+
+```json
+{
+  "rooms": [
+    {
+      "name": "Garage",
+      "switch": "switch.garage_power",
+      "number": "number.garage_volume"
+    }
+  ]
+}
+```
