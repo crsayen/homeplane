@@ -280,6 +280,38 @@ export function LightingDashboard({
   const suppressClickTimeoutsRef = useRef<Record<string, number>>({});
   const dragThrottleRef = useRef<Record<string, number>>({});
   const dragHoldTimerRef = useRef<number | null>(null);
+  const activeDragButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  function clearActiveDragButtonTouchLock(pointerId?: number): void {
+    const button = activeDragButtonRef.current;
+    if (!button) {
+      return;
+    }
+    if (pointerId !== undefined && button.hasPointerCapture(pointerId)) {
+      try {
+        button.releasePointerCapture(pointerId);
+      } catch {
+        // Ignore if the capture was already released.
+      }
+    }
+    button.style.touchAction = "";
+    button.style.overscrollBehavior = "";
+    activeDragButtonRef.current = null;
+  }
+
+  function enableActiveDragButtonTouchLock(pointerId: number): void {
+    const button = activeDragButtonRef.current;
+    if (!button) {
+      return;
+    }
+    button.style.touchAction = "none";
+    button.style.overscrollBehavior = "contain";
+    try {
+      button.setPointerCapture(pointerId);
+    } catch {
+      // Ignore if pointer capture is unavailable on this browser.
+    }
+  }
 
   const lightConfigByEntity = useMemo(() => {
     const mapping: Record<string, NormalizedLight> = {};
@@ -403,6 +435,7 @@ export function LightingDashboard({
         window.clearTimeout(dragHoldTimerRef.current);
         dragHoldTimerRef.current = null;
       }
+      clearActiveDragButtonTouchLock();
       for (const timeoutId of Object.values(pendingTimeoutsRef.current)) {
         window.clearTimeout(timeoutId);
       }
@@ -497,6 +530,7 @@ export function LightingDashboard({
               window.clearTimeout(dragHoldTimerRef.current);
               dragHoldTimerRef.current = null;
             }
+            clearActiveDragButtonTouchLock(previous.pointerId);
             queueClickSuppression(previous.entityId);
             return null;
           }
@@ -532,6 +566,7 @@ export function LightingDashboard({
         window.clearTimeout(dragHoldTimerRef.current);
         dragHoldTimerRef.current = null;
       }
+      clearActiveDragButtonTouchLock(dragState.pointerId);
       if (dragState.holdReady) {
         queueClickSuppression(dragState.entityId);
       }
@@ -570,6 +605,22 @@ export function LightingDashboard({
       window.removeEventListener("pointercancel", finishDrag);
     };
   }, [client, dragState]);
+
+  useEffect(() => {
+    function onTouchMove(event: TouchEvent) {
+      if (!dragState?.holdReady) {
+        return;
+      }
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+    }
+
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => {
+      window.removeEventListener("touchmove", onTouchMove);
+    };
+  }, [dragState?.holdReady]);
 
   async function toggleLight(lightId: string, isOn: boolean, timeoutSeconds?: number): Promise<void> {
     const targetState: "on" | "off" = isOn ? "off" : "on";
@@ -801,6 +852,7 @@ export function LightingDashboard({
                         if (isBusy || isPending || !isDimmable || !event.isPrimary || dragState !== null) {
                           return;
                         }
+                        activeDragButtonRef.current = event.currentTarget as HTMLButtonElement;
                         if (dragHoldTimerRef.current !== null) {
                           window.clearTimeout(dragHoldTimerRef.current);
                           dragHoldTimerRef.current = null;
@@ -825,6 +877,7 @@ export function LightingDashboard({
                               return previous;
                             }
                             suppressClickRef.current.add(previous.entityId);
+                            enableActiveDragButtonTouchLock(previous.pointerId);
                             return { ...previous, holdReady: true };
                           });
                           dragHoldTimerRef.current = null;
