@@ -118,6 +118,13 @@
     white-space: nowrap;
   }
 
+  .hp-light-row,
+  .hp-light-row * {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
   [data-ui-density="normal"] .hp-light-grid {
     grid-template-columns: repeat(1, minmax(0, 1fr));
   }
