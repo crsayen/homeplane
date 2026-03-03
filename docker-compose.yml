@@ -6,6 +6,9 @@ services:
       - ./backend/.env
     environment:
       AUDIO_CONFIG_PATH: /data/multi-room-audio.config.json
+      AUDIO_CONFIG_SEED_PATH: /app/data/multi-room-audio.config.json
+      LIGHTING_CONFIG_PATH: /data/lighting.config.json
+      LIGHTING_CONFIG_SEED_PATH: /app/data/lighting.config.json
     volumes:
       - homeplane_config:/data
     restart: unless-stopped

@@ -1,9 +1,9 @@
 {
   "rooms": [
     {
-      "name": "Garage",
-      "switch": "switch.garage_power",
-      "number": "number.garage_volume"
+      "name": "Living Room",
+      "switch": "switch.living_room_power",
+      "number": "number.living_room_volume"
     },
     {
       "name": "Kitchen",
@@ -11,14 +11,19 @@
       "number": "number.kitchen_volume"
     },
     {
-      "name": "Living Room",
-      "switch": "switch.living_room_power",
-      "number": "number.living_room_volume"
-    },
-    {
       "name": "Back Yard",
       "switch": "switch.back_yard_power",
       "number": "number.back_yard_volume"
+    },
+    {
+      "name": "Garage",
+      "switch": "switch.garage_power",
+      "number": "number.garage_volume"
+    },
+    {
+      "name": "Bedroom",
+      "switch": "switch.bedroom_power",
+      "number": "number.bedroom_volume"
     },
     {
       "name": "Casa Shea",

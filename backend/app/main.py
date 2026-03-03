@@ -6,7 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes.orchestration import router as orchestration_router
 from app.core.config import get_settings
 from app.core.rate_limit import InMemoryRateLimiter
-from app.services.config_store import AudioConfigStore
+from app.schemas.configuration import MultiRoomAudioConfig
+from app.schemas.lighting import LightingConfig
+from app.services.config_store import JsonConfigStore
 from app.services.ha_client import HomeAssistantClient
 
 
@@ -22,9 +24,15 @@ async def lifespan(app: FastAPI):
         max_requests=settings.rate_limit_requests,
         window_seconds=settings.rate_limit_window_seconds,
     )
-    app.state.audio_config_store = AudioConfigStore(
+    app.state.audio_config_store = JsonConfigStore(
         settings.audio_config_path,
+        model_cls=MultiRoomAudioConfig,
         seed_path=settings.audio_config_seed_path,
+    )
+    app.state.lighting_config_store = JsonConfigStore(
+        settings.lighting_config_path,
+        model_cls=LightingConfig,
+        seed_path=settings.lighting_config_seed_path,
     )
 
     yield

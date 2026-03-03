@@ -1,0 +1,207 @@
+{
+  "rooms": [
+    {
+      "name": "Bedroom",
+      "lights": [
+        {
+          "entity_id": "light.master_bedroom_main_lights",
+          "display_name": "Bedroom",
+          "icon": "mdi:chandelier",
+          "update_timeout_seconds": 5
+        }
+      ]
+    },
+    {
+      "name": "Living Room",
+      "lights": [
+        {
+          "entity_id": "light.adaptive_phase_dimmer_foyer_pendan",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.keypad_dimmer_lounge_chandalier",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.keypad_dimmer_back_hall_pendant",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.hue_color_lamp_2",
+          "display_name": "Floor Lamp",
+          "icon": "mdi:floor-lamp",
+          "update_timeout_seconds": 5
+        }
+      ]
+    },
+    {
+      "name": "Back Room",
+      "lights": [
+        {
+          "entity_id": "light.control4_ea5_000fff9153a4_hearth_room_downlights",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.keypad_dimmer_hearth_room_chandalier",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.control4_ea5_000fff9153a4_fireplace_spots",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.hue_white_lamp_1",
+          "display_name": "Chihuahua Lamp",
+          "icon": "mdi:lamp",
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.hue_color_lamp_1",
+          "display_name": "Floor Lamp",
+          "icon": "mdi:floor-lamp",
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.ram_a_lamp",
+          "display_name": "Ram-a-Lamp",
+          "icon": "mdi:lamp",
+          "update_timeout_seconds": 5
+        }
+      ]
+    },
+    {
+      "name": "Kitchen",
+      "lights": [
+        {
+          "entity_id": "light.adaptive_phase_dimmer_kitchen_downlights",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.adaptive_phase_dimmer_sink_pendant",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.adaptive_phase_dimmer_pantry_downlights",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.adaptive_phase_dimmer_pantry_pendants",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        }
+      ]
+    },
+    {
+      "name": "Basement Main",
+      "lights": [
+        {
+          "entity_id": "light.adaptive_phase_dimmer_ll_landing_fixture",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.adaptive_phase_dimmer_game_room_downlights",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.adaptive_phase_dimmer_bedroom_hall_fixture",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.keypad_dimmer_sewing_studio_downlights",
+          "display_name": null,
+          "icon": "mdi:lightbulb-fluorescent-tube",
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.basement_string_lights",
+          "display_name": null,
+          "icon": "mdi:string-lights",
+          "update_timeout_seconds": 5
+        }
+      ]
+    },
+    {
+      "name": "Falcon's Perch",
+      "lights": [
+        {
+          "entity_id": "light.adaptive_phase_dimmer_ll_bed_downlights",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.keypad_dimmer_ll_bed_chandalier",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 3.0
+        },
+        {
+          "entity_id": "light.switch_closet_downlights",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        }
+      ]
+    },
+    {
+      "name": "Exterior",
+      "lights": [
+        {
+          "entity_id": "light.adaptive_phase_dimmer_patio_light_control",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.switch_patio_string_lights",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.switch_patio_sconces",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.control4_ea5_000fff9153a4_porte_cochere_downlights",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        },
+        {
+          "entity_id": "light.switch_porch_sconce",
+          "display_name": null,
+          "icon": null,
+          "update_timeout_seconds": 5
+        }
+      ]
+    }
+  ]
+}

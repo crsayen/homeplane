@@ -1,32 +1,35 @@
 import asyncio
 import json
 from pathlib import Path
+from typing import TypeVar
 
-from app.schemas.configuration import MultiRoomAudioConfig
+from pydantic import BaseModel
 
+ModelT = TypeVar("ModelT", bound=BaseModel)
 
-class AudioConfigStore:
-    def __init__(self, path: str, seed_path: str | None = None) -> None:
+class JsonConfigStore:
+    def __init__(self, path: str, model_cls: type[ModelT], seed_path: str | None = None) -> None:
         self._path = Path(path)
+        self._model_cls = model_cls
         self._seed_path = Path(seed_path) if seed_path else None
         self._lock = asyncio.Lock()
 
-    async def load(self) -> MultiRoomAudioConfig:
+    async def load(self) -> ModelT:
         async with self._lock:
             if not self._path.exists():
                 self._path.parent.mkdir(parents=True, exist_ok=True)
                 if self._seed_path and self._seed_path.exists():
                     self._path.write_text(self._seed_path.read_text(encoding="utf-8"), encoding="utf-8")
                 else:
-                    config = MultiRoomAudioConfig(rooms=[])
+                    config = self._model_cls()
                     self._path.write_text(config.model_dump_json(indent=2), encoding="utf-8")
                     return config
 
             raw = self._path.read_text(encoding="utf-8")
             payload = json.loads(raw)
-            return MultiRoomAudioConfig.model_validate(payload)
+            return self._model_cls.model_validate(payload)
 
-    async def save(self, config: MultiRoomAudioConfig) -> MultiRoomAudioConfig:
+    async def save(self, config: ModelT) -> ModelT:
         async with self._lock:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             self._path.write_text(config.model_dump_json(indent=2), encoding="utf-8")

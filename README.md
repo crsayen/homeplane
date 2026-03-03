@@ -136,10 +136,13 @@ All endpoints require `x-homeplane-key` header.
 - `POST /api/scenes/{entity_id}/activate`
 - `GET /api/entities/{entity_id}/state`
 - `POST /api/switches/{entity_id}/state`
+- `POST /api/lights/{entity_id}/state`
 - `POST /api/numbers/{entity_id}/value`
 - `GET /api/health`
 - `GET /api/audio-config`
 - `PUT /api/audio-config`
+- `GET /api/lighting-config`
+- `PUT /api/lighting-config`
 - `WS /api/ws/entities?api_key=...&entity_ids=switch.a,number.b`
 
 ## Notes
@@ -149,6 +152,7 @@ All endpoints require `x-homeplane-key` header.
 - CORS is configured from `ALLOWED_ORIGINS`.
 - Dashboard subscribes to Home Assistant `state_changed` events through backend websocket streaming.
 - Room config is stored server-side and can be edited from the dashboard UI.
+- Lighting config is stored server-side and can be edited from the dashboard UI.
 
 ## Multi-Room Audio Dashboard
 
@@ -157,5 +161,10 @@ Room config is loaded from backend `GET /api/audio-config` and edited in-app via
 Dashboard component:
 - [MultiRoomAudioDashboard.tsx](/Users/chrissayen/dev/homeplane/frontend/src/components/MultiRoomAudioDashboard.tsx)
 - Tailwind CSS powered, mobile-first layout with light/dark/system theme toggle.
+
+Dashboard paths:
+- `/` dashboard index
+- `/dashboards/audio` multi-room audio dashboard
+- `/dashboards/lighting` lighting dashboard (room-grouped on/off lights, config editable in-app)
 Default seed file in backend image:
 - [backend/data/multi-room-audio.config.json](/Users/chrissayen/dev/homeplane/backend/data/multi-room-audio.config.json)

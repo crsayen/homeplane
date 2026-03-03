@@ -6,6 +6,9 @@ import {
   MultiRoomAudioConfig,
   RoomAudioConfig,
 } from "../api/homeplaneClient";
+import { UiDensity } from "../lib/uiDensity";
+import { ThemeMode } from "../lib/themeMode";
+import { DashboardTopBar } from "./DashboardTopBar";
 
 type RoomState = {
   loading: boolean;
@@ -16,7 +19,6 @@ type RoomState = {
 
 type RoomStateMap = Record<string, RoomState>;
 type StreamState = "connecting" | "live" | "reconnecting";
-type ThemeMode = "system" | "light" | "dark";
 
 function toWebSocketUrl(apiBaseUrl: string): string {
   const parsed = new URL(apiBaseUrl);
@@ -34,40 +36,28 @@ function toDisplayVolume(value: unknown): string {
   return `${Math.round(asNumber * 100)}%`;
 }
 
-function nextTheme(mode: ThemeMode): ThemeMode {
-  if (mode === "system") {
-    return "dark";
-  }
-  if (mode === "dark") {
-    return "light";
-  }
-  return "system";
-}
-
-function themeLabel(mode: ThemeMode): string {
-  if (mode === "system") {
-    return "System";
-  }
-  if (mode === "dark") {
-    return "Dark";
-  }
-  return "Light";
-}
-
 export function MultiRoomAudioDashboard({
   apiBaseUrl,
   apiKey,
+  themeMode,
+  setThemeMode,
+  resolvedTheme,
+  densityMode,
+  setDensityMode,
 }: {
   apiBaseUrl: string;
   apiKey: string;
+  themeMode: ThemeMode;
+  setThemeMode: (next: ThemeMode | ((prev: ThemeMode) => ThemeMode)) => void;
+  resolvedTheme: "light" | "dark";
+  densityMode: UiDensity;
+  setDensityMode: (next: UiDensity | ((prev: UiDensity) => UiDensity)) => void;
 }) {
   const client = useMemo(() => new HomeplaneClient(apiBaseUrl, apiKey), [apiBaseUrl, apiKey]);
   const [config, setConfig] = useState<MultiRoomAudioConfig | null>(null);
   const [roomStates, setRoomStates] = useState<RoomStateMap>({});
   const [configError, setConfigError] = useState<string | null>(null);
   const [streamState, setStreamState] = useState<StreamState>("connecting");
-  const [themeMode, setThemeMode] = useState<ThemeMode>("system");
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
   const [masterVolume, setMasterVolume] = useState(0.5);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -75,35 +65,6 @@ export function MultiRoomAudioDashboard({
   const [configSaveError, setConfigSaveError] = useState<string | null>(null);
   const [configSaving, setConfigSaving] = useState(false);
   const webSocketRef = useRef<WebSocket | null>(null);
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem("homeplane-theme");
-    if (stored === "light" || stored === "dark" || stored === "system") {
-      setThemeMode(stored);
-    }
-  }, []);
-
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-
-    const applyTheme = () => {
-      const nextResolved = themeMode === "system" ? (media.matches ? "dark" : "light") : themeMode;
-      document.documentElement.classList.toggle("dark", nextResolved === "dark");
-      setResolvedTheme(nextResolved);
-    };
-
-    applyTheme();
-    if (themeMode === "system") {
-      media.addEventListener("change", applyTheme);
-      return () => media.removeEventListener("change", applyTheme);
-    }
-
-    return;
-  }, [themeMode]);
-
-  useEffect(() => {
-    window.localStorage.setItem("homeplane-theme", themeMode);
-  }, [themeMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -340,46 +301,25 @@ export function MultiRoomAudioDashboard({
   }
 
   return (
-    <div className="relative min-h-screen overflow-x-clip px-2.5 pb-6 pt-2.5 sm:px-6 sm:pb-10 sm:pt-4 lg:px-10">
-      <div className="ambient-bg" />
+    <div className="hp-shell relative min-h-screen overflow-x-clip px-2.5 pb-6 pt-2.5 sm:px-6 sm:pb-10 sm:pt-4 lg:px-10">
+      <div className="ambient-bg hp-nonfunctional" />
 
-      <header className="sticky top-2 z-20 mx-auto mb-3 flex w-full max-w-6xl items-center justify-between gap-2 rounded-xl border border-white/40 bg-white/75 p-2 shadow-lg shadow-cyan-900/10 backdrop-blur-xl dark:border-white/10 dark:bg-black/80 sm:top-3 sm:mb-6 sm:gap-3 sm:rounded-2xl sm:p-3">
-        <div className="min-w-0 flex items-center gap-2 sm:gap-3">
-          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 sm:text-base">Homeplane</span>
-          <span
-            className={`inline-flex shrink-0 items-center rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] sm:px-2.5 sm:tracking-[0.16em] ${
-              streamState === "live"
-                ? "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/25 dark:text-emerald-300"
-                : "bg-amber-500/20 text-amber-700 ring-1 ring-amber-500/25 dark:text-amber-300"
-            }`}
-          >
-            Stream {streamState}
-          </span>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              if (config) {
-                setConfigDraft(JSON.stringify(config, null, 2));
-              }
-              setConfigSaveError(null);
-              setEditorOpen(true);
-            }}
-            className="whitespace-nowrap rounded-lg border border-slate-300/80 bg-white/90 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-700 transition hover:border-cyan-400 hover:text-cyan-700 dark:border-white/15 dark:bg-black dark:text-slate-200 dark:hover:border-cyan-400 dark:hover:text-cyan-200 sm:rounded-xl sm:px-3 sm:py-2 sm:text-xs sm:tracking-[0.18em]"
-          >
-            Config
-          </button>
-          <button
-            type="button"
-            onClick={() => setThemeMode((previous) => nextTheme(previous))}
-            title={`Theme ${themeLabel(themeMode)} (${resolvedTheme})`}
-            className="whitespace-nowrap rounded-lg border border-slate-300/80 bg-white/90 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-700 transition hover:border-cyan-400 hover:text-cyan-700 dark:border-white/15 dark:bg-black dark:text-slate-200 dark:hover:border-cyan-400 dark:hover:text-cyan-200 sm:rounded-xl sm:px-3 sm:py-2 sm:text-xs sm:tracking-[0.18em]"
-          >
-            {themeLabel(themeMode)}
-          </button>
-        </div>
-      </header>
+      <DashboardTopBar
+        currentDashboard="audio"
+        onOpenConfig={() => {
+          if (config) {
+            setConfigDraft(JSON.stringify(config, null, 2));
+          }
+          setConfigSaveError(null);
+          setEditorOpen(true);
+        }}
+        streamState={streamState}
+        themeMode={themeMode}
+        setThemeMode={setThemeMode}
+        resolvedTheme={resolvedTheme}
+        densityMode={densityMode}
+        setDensityMode={setDensityMode}
+      />
 
       {editorOpen ? (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/55 p-3">
@@ -425,7 +365,7 @@ export function MultiRoomAudioDashboard({
         </div>
       ) : null}
 
-      <section className="mx-auto mb-3 w-full max-w-6xl rounded-xl border border-white/40 bg-white/75 p-3 shadow-lg shadow-cyan-900/10 backdrop-blur-xl dark:border-white/10 dark:bg-black/80 sm:mb-5 sm:rounded-2xl sm:p-4">
+      <section className="hp-global-card mx-auto mb-3 w-full max-w-6xl rounded-xl border border-white/40 bg-white/75 p-3 shadow-lg shadow-cyan-900/10 backdrop-blur-xl dark:border-white/10 dark:bg-black/80 sm:mb-5 sm:rounded-2xl sm:p-4">
         <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600 dark:text-slate-300">
           <span>Global Controls</span>
           <span>{onRooms.length} On</span>
@@ -478,11 +418,68 @@ export function MultiRoomAudioDashboard({
           No rooms configured yet. Open <span className="font-semibold">Config</span> to add rooms and save.
         </div>
       ) : (
-        <div className="mx-auto grid w-full max-w-6xl gap-2.5 sm:gap-5 xl:grid-cols-2">
+        <div className="hp-room-grid mx-auto grid w-full max-w-6xl gap-2.5 sm:gap-5 xl:grid-cols-2">
           {config.rooms.map((room, index) => {
             const roomState = roomStates[room.name];
             const switchOn = roomState?.switchState?.state === "on";
             const currentVolume = Number(roomState?.numberState?.state ?? 0);
+            const isMinimalist = densityMode === "minimalist";
+
+            if (isMinimalist) {
+              return (
+                <section
+                  key={room.name}
+                  className="hp-room-card animate-fade-up flex h-16 items-center rounded-2xl border border-slate-900/20 bg-white/92 px-3 shadow-lg shadow-slate-900/15 ring-1 ring-slate-900/5 dark:border-white/20 dark:bg-black/88 dark:shadow-black/70 dark:ring-white/10"
+                  style={{ animationDelay: `${index * 70}ms` }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => void setSwitch(room, !switchOn)}
+                    className="min-w-0 shrink-0 text-left text-base font-semibold leading-none text-slate-900 dark:text-slate-100"
+                  >
+                    <span className="block truncate">{room.name}</span>
+                  </button>
+
+                  {switchOn ? (
+                    <div className="ml-3 min-w-0 flex-1">
+                      <input
+                        id={`volume-min-${room.name}`}
+                        className="volume-slider"
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={Number.isFinite(currentVolume) ? currentVolume : 0}
+                        onChange={(event) => {
+                          const nextValue = Number(event.target.value);
+                          setRoomStates((previous) => ({
+                            ...previous,
+                            [room.name]: {
+                              ...(previous[room.name] ?? { loading: false }),
+                              numberState: {
+                                ...(previous[room.name]?.numberState ?? {
+                                  entity_id: room.number,
+                                  attributes: {},
+                                  last_changed: null,
+                                  last_updated: null,
+                                }),
+                                state: String(nextValue),
+                                entity_id: room.number,
+                              },
+                            },
+                          }));
+                        }}
+                        onPointerUp={(event) => void setVolume(room, Number((event.target as HTMLInputElement).value))}
+                      />
+                    </div>
+                  ) : (
+                    <span className="ml-auto text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                      Off
+                    </span>
+                  )}
+                </section>
+              );
+            }
 
             if (!switchOn) {
               return (
@@ -490,17 +487,17 @@ export function MultiRoomAudioDashboard({
                   key={room.name}
                   type="button"
                   onClick={() => void setSwitch(room, true)}
-                  className="animate-fade-up flex w-full flex-col rounded-2xl border border-slate-300/80 bg-slate-200/65 p-4 text-left shadow-lg shadow-slate-900/10 backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-slate-100/80 hover:shadow-glow dark:border-white/10 dark:bg-[#0a0a0a]/90 dark:shadow-black/70 dark:hover:border-cyan-900 dark:hover:bg-[#0d0d0d] sm:rounded-3xl sm:p-6"
+                  className="hp-room-card animate-fade-up flex w-full flex-col rounded-2xl border border-slate-300/80 bg-slate-200/65 p-4 text-left shadow-lg shadow-slate-900/10 backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-slate-100/80 hover:shadow-glow dark:border-white/10 dark:bg-[#0a0a0a]/90 dark:shadow-black/70 dark:hover:border-cyan-900 dark:hover:bg-[#0d0d0d] sm:rounded-3xl sm:p-6"
                   style={{ animationDelay: `${index * 70}ms` }}
                 >
                   <div>
                     <h2 className="text-[2rem] font-semibold leading-none text-slate-900 dark:text-slate-100 sm:text-3xl">{room.name}</h2>
-                    <p className="mt-1.5 text-[11px] uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 sm:text-xs sm:tracking-[0.16em]">
+                    <p className="hp-nonfunctional mt-1.5 text-[11px] uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 sm:text-xs sm:tracking-[0.16em]">
                       {roomState?.loading ? "syncing" : "off"} · tap to turn on
                     </p>
                   </div>
 
-                  <div className="mt-4 text-[11px] uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
+                  <div className="hp-nonfunctional mt-4 text-[11px] uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
                     <span className="block max-w-full truncate" title={room.switch}>
                       {room.switch}
                     </span>
@@ -518,13 +515,13 @@ export function MultiRoomAudioDashboard({
             return (
               <section
                 key={room.name}
-                className="animate-fade-up flex flex-col rounded-2xl border border-slate-900/20 bg-white/92 p-4 shadow-lg shadow-slate-900/15 ring-1 ring-slate-900/5 backdrop-blur-sm dark:border-white/20 dark:bg-black/88 dark:shadow-black/70 dark:ring-white/10 sm:rounded-3xl sm:p-5"
+                className="hp-room-card animate-fade-up flex flex-col rounded-2xl border border-slate-900/20 bg-white/92 p-4 shadow-lg shadow-slate-900/15 ring-1 ring-slate-900/5 backdrop-blur-sm dark:border-white/20 dark:bg-black/88 dark:shadow-black/70 dark:ring-white/10 sm:rounded-3xl sm:p-5"
                 style={{ animationDelay: `${index * 70}ms` }}
               >
                 <div className="mb-3 flex items-start justify-between gap-3 sm:mb-4">
                   <div>
                     <h2 className="text-[2rem] font-semibold leading-none text-slate-900 dark:text-slate-100 sm:text-3xl">{room.name}</h2>
-                    <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 sm:tracking-[0.16em]">
+                    <p className="hp-nonfunctional mt-1 text-[11px] uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 sm:tracking-[0.16em]">
                       {roomState?.loading ? "syncing" : "ready"}
                     </p>
                   </div>
@@ -582,7 +579,7 @@ export function MultiRoomAudioDashboard({
                   />
                 </div>
 
-                <div className="mt-3 flex min-w-0 items-center justify-between gap-2 text-[11px] uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400 sm:mt-4 sm:tracking-[0.14em]">
+                <div className="hp-nonfunctional mt-3 flex min-w-0 items-center justify-between gap-2 text-[11px] uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400 sm:mt-4 sm:tracking-[0.14em]">
                   <span className="min-w-0 max-w-[62%] truncate" title={room.switch}>
                     {room.switch}
                   </span>

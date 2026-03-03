@@ -22,6 +22,10 @@ export interface SetNumberValueRequest {
   value: number;
 }
 
+export interface SetLightStateRequest {
+  is_on: boolean;
+}
+
 export interface RoomAudioConfig {
   name: string;
   switch: string;
@@ -30,6 +34,22 @@ export interface RoomAudioConfig {
 
 export interface MultiRoomAudioConfig {
   rooms: RoomAudioConfig[];
+}
+
+export interface RoomLightingConfig {
+  name: string;
+  lights: Array<string | LightingEntityConfig>;
+}
+
+export interface LightingEntityConfig {
+  entity_id: string;
+  display_name?: string;
+  icon?: string;
+  update_timeout_seconds?: number;
+}
+
+export interface LightingConfig {
+  rooms: RoomLightingConfig[];
 }
 
 export class HomeplaneClient {
@@ -75,12 +95,30 @@ export class HomeplaneClient {
     });
   }
 
+  async setLightState(entityId: string, payload: SetLightStateRequest): Promise<unknown[]> {
+    return this.request<unknown[]>(`/api/lights/${entityId}/state`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
   async getAudioConfig(): Promise<MultiRoomAudioConfig> {
     return this.request<MultiRoomAudioConfig>("/api/audio-config", { method: "GET" });
   }
 
   async updateAudioConfig(payload: MultiRoomAudioConfig): Promise<MultiRoomAudioConfig> {
     return this.request<MultiRoomAudioConfig>("/api/audio-config", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getLightingConfig(): Promise<LightingConfig> {
+    return this.request<LightingConfig>("/api/lighting-config", { method: "GET" });
+  }
+
+  async updateLightingConfig(payload: LightingConfig): Promise<LightingConfig> {
+    return this.request<LightingConfig>("/api/lighting-config", {
       method: "PUT",
       body: JSON.stringify(payload),
     });

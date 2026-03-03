@@ -13,6 +13,10 @@ class SetSwitchStateRequest(BaseModel):
     is_on: bool
 
 
+class SetLightStateRequest(BaseModel):
+    is_on: bool
+
+
 class SetNumberValueRequest(BaseModel):
     value: float
 

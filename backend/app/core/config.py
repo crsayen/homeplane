@@ -26,6 +26,11 @@ class Settings(BaseSettings):
         default="./data/multi-room-audio.config.json",
         alias="AUDIO_CONFIG_SEED_PATH",
     )
+    lighting_config_path: str = Field(default="./data/lighting.config.json", alias="LIGHTING_CONFIG_PATH")
+    lighting_config_seed_path: str = Field(
+        default="./data/lighting.config.json",
+        alias="LIGHTING_CONFIG_SEED_PATH",
+    )
 
     @field_validator("allowed_origins", mode="before")
     @classmethod

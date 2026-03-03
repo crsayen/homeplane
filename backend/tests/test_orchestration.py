@@ -45,8 +45,13 @@ class FakeHAClient:
 @pytest.fixture
 def app_client() -> tuple[TestClient, FakeHAClient]:
     config_file = Path(__file__).resolve().parent / "test-audio-config.json"
+    lighting_file = Path(__file__).resolve().parent / "test-lighting-config.json"
     config_file.write_text(
         '{\n  "rooms": [\n    {"name": "Garage", "switch": "switch.garage_power", "number": "number.garage_volume"}\n  ]\n}',
+        encoding="utf-8",
+    )
+    lighting_file.write_text(
+        '{\n  "rooms": [\n    {"name": "Kitchen", "lights": ["light.kitchen_main_lights"]}\n  ]\n}',
         encoding="utf-8",
     )
 
@@ -57,6 +62,9 @@ def app_client() -> tuple[TestClient, FakeHAClient]:
     os.environ["RATE_LIMIT_REQUESTS"] = "100"
     os.environ["RATE_LIMIT_WINDOW_SECONDS"] = "60"
     os.environ["AUDIO_CONFIG_PATH"] = str(config_file)
+    os.environ["AUDIO_CONFIG_SEED_PATH"] = str(config_file)
+    os.environ["LIGHTING_CONFIG_PATH"] = str(lighting_file)
+    os.environ["LIGHTING_CONFIG_SEED_PATH"] = str(lighting_file)
 
     import app.core.config as config_module
     import app.main as main_module
@@ -70,6 +78,8 @@ def app_client() -> tuple[TestClient, FakeHAClient]:
 
     if config_file.exists():
         config_file.unlink()
+    if lighting_file.exists():
+        lighting_file.unlink()
 
 
 def test_health_requires_api_key(app_client: tuple[TestClient, FakeHAClient]) -> None:
@@ -178,6 +188,18 @@ def test_set_number_value_forwards_value(app_client: tuple[TestClient, FakeHACli
     ]
 
 
+def test_set_light_state_forwards_value(app_client: tuple[TestClient, FakeHAClient]) -> None:
+    client, fake_ha = app_client
+    response = client.post(
+        "/api/lights/light.kitchen_main_lights/state",
+        headers={"x-homeplane-key": "test-key"},
+        json={"is_on": True},
+    )
+
+    assert response.status_code == 200
+    assert fake_ha.service_calls == [("light", "turn_on", {"entity_id": "light.kitchen_main_lights"})]
+
+
 def test_websocket_streams_entity_updates(app_client: tuple[TestClient, FakeHAClient]) -> None:
     client, _ = app_client
     with client.websocket_connect("/api/ws/entities?api_key=test-key&entity_ids=switch.garage_power") as websocket:
@@ -211,3 +233,61 @@ def test_put_audio_config_persists_content(app_client: tuple[TestClient, FakeHAC
     read_response = client.get("/api/audio-config", headers={"x-homeplane-key": "test-key"})
     assert read_response.status_code == 200
     assert read_response.json() == payload
+
+
+def test_get_lighting_config_returns_file_content(app_client: tuple[TestClient, FakeHAClient]) -> None:
+    client, _ = app_client
+    response = client.get("/api/lighting-config", headers={"x-homeplane-key": "test-key"})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["rooms"]) == 1
+    assert body["rooms"][0]["name"] == "Kitchen"
+
+
+def test_put_lighting_config_persists_content(app_client: tuple[TestClient, FakeHAClient]) -> None:
+    client, _ = app_client
+    payload = {
+        "rooms": [
+            {"name": "Living Room", "lights": ["light.living_room_main_lights", "light.living_room_lamp"]},
+        ]
+    }
+    write_response = client.put("/api/lighting-config", headers={"x-homeplane-key": "test-key"}, json=payload)
+    assert write_response.status_code == 200
+
+    read_response = client.get("/api/lighting-config", headers={"x-homeplane-key": "test-key"})
+    assert read_response.status_code == 200
+    assert read_response.json() == payload
+
+
+def test_put_lighting_config_with_display_names(app_client: tuple[TestClient, FakeHAClient]) -> None:
+    client, _ = app_client
+    payload = {
+        "rooms": [
+            {
+                "name": "Kitchen",
+                "lights": [
+                    {
+                        "entity_id": "light.kitchen_main_lights",
+                        "display_name": "Kitchen Main",
+                        "icon": "mdi:chandelier",
+                        "update_timeout_seconds": 8,
+                    },
+                    {"entity_id": "light.kitchen_sink_pendant"},
+                ],
+            },
+        ]
+    }
+    write_response = client.put("/api/lighting-config", headers={"x-homeplane-key": "test-key"}, json=payload)
+    assert write_response.status_code == 200
+
+    read_response = client.get("/api/lighting-config", headers={"x-homeplane-key": "test-key"})
+    assert read_response.status_code == 200
+    body = read_response.json()
+    assert body["rooms"][0]["name"] == "Kitchen"
+    assert body["rooms"][0]["lights"][0] == {
+        "entity_id": "light.kitchen_main_lights",
+        "display_name": "Kitchen Main",
+        "icon": "mdi:chandelier",
+        "update_timeout_seconds": 8,
+    }
+    assert body["rooms"][0]["lights"][1]["entity_id"] == "light.kitchen_sink_pendant"

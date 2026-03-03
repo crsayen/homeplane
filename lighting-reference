@@ -1,0 +1,286 @@
+views:
+  - title: Home
+    sections:
+      - type: grid
+        cards:
+          - show_name: true
+            show_icon: true
+            type: button
+            entity: script.fahh
+            name: faaahh
+            icon: mdi:alpha-f
+            tap_action:
+              action: perform-action
+              perform_action: script.fahh
+              target: {}
+          - type: custom:mushroom-chips-card
+            chips:
+              - type: template
+                content: >-
+                  have a virtual sensor or something with a 'active areas' that
+                  can change based on the time of day (e.g. during work, living
+                  room and kitchen are not active). Also, controls for selecting
+                  which areas are active (e.g. backyard is active when we are
+                  outside)
+          - type: heading
+            heading: Bedroom
+            heading_style: title
+            icon: mdi:bed-king
+          - type: custom:mushroom-light-card
+            entity: light.master_bedroom_main_lights
+            icon: mdi:chandelier
+            show_brightness_control: true
+            collapsible_controls: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+            name: Bedroom
+        column_span: 4
+      - type: grid
+        cards:
+          - type: heading
+            heading: Living Room
+            heading_style: title
+            icon: mdi:sofa
+          - type: custom:mushroom-light-card
+            entity: light.adaptive_phase_dimmer_foyer_pendan
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+              rows: 1
+          - type: custom:mushroom-light-card
+            entity: light.keypad_dimmer_lounge_chandalier
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+            collapsible_controls: true
+          - type: custom:mushroom-light-card
+            entity: light.keypad_dimmer_back_hall_pendant
+            grid_options:
+              columns: 24
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+          - type: custom:mushroom-light-card
+            entity: light.hue_color_lamp_2
+            collapsible_controls: true
+            show_brightness_control: true
+            show_color_temp_control: true
+            show_color_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+            icon: mdi:floor-lamp
+            name: Floor Lamp
+            use_light_color: true
+        column_span: 4
+      - type: grid
+        cards:
+          - type: heading
+            heading: Back Room
+            heading_style: title
+            icon: mdi:fireplace
+            grid_options:
+              columns: 24
+              rows: 1
+          - type: custom:mushroom-light-card
+            entity: light.control4_ea5_000fff9153a4_hearth_room_downlights
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+          - type: custom:mushroom-light-card
+            entity: light.keypad_dimmer_hearth_room_chandalier
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+          - type: custom:mushroom-light-card
+            entity: light.control4_ea5_000fff9153a4_fireplace_spots
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+          - type: custom:mushroom-light-card
+            entity: light.hue_white_lamp_1
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+            name: Chihuahua Lamp
+            icon: mdi:lamp
+          - type: custom:mushroom-light-card
+            entity: light.hue_color_lamp_1
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+            name: Floor Lamp
+            icon: mdi:floor-lamp
+          - type: custom:mushroom-light-card
+            entity: light.ram_a_lamp
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+            icon: mdi:lamp
+            name: Ram-a-Lamp
+        column_span: 4
+      - type: grid
+        cards:
+          - type: heading
+            heading: Kitchen
+            heading_style: title
+            icon: mdi:stove
+          - type: custom:mushroom-light-card
+            entity: light.adaptive_phase_dimmer_kitchen_downlights
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+          - type: custom:mushroom-light-card
+            entity: light.adaptive_phase_dimmer_sink_pendant
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+          - type: custom:mushroom-light-card
+            entity: light.adaptive_phase_dimmer_pantry_downlights
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+          - type: custom:mushroom-light-card
+            entity: light.adaptive_phase_dimmer_pantry_pendants
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+        column_span: 4
+      - type: grid
+        cards:
+          - type: heading
+            heading: Basement Main
+            heading_style: title
+            icon: mdi:stairs
+          - type: custom:mushroom-light-card
+            entity: light.adaptive_phase_dimmer_ll_landing_fixture
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+          - type: custom:mushroom-light-card
+            entity: light.adaptive_phase_dimmer_game_room_downlights
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+          - type: custom:mushroom-light-card
+            entity: light.adaptive_phase_dimmer_bedroom_hall_fixture
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+          - type: custom:mushroom-light-card
+            entity: light.keypad_dimmer_sewing_studio_downlights
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+            icon: mdi:lightbulb-fluorescent-tube
+          - type: custom:mushroom-light-card
+            entity: light.basement_string_lights
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+            icon: mdi:string-lights
+        column_span: 4
+      - type: grid
+        cards:
+          - type: heading
+            heading: Falcon's Perch
+            heading_style: title
+            icon: mdi:bird
+          - type: custom:mushroom-light-card
+            entity: light.adaptive_phase_dimmer_ll_bed_downlights
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+          - type: custom:mushroom-light-card
+            entity: light.keypad_dimmer_ll_bed_chandalier
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+          - type: custom:mushroom-light-card
+            entity: light.switch_closet_downlights
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+        column_span: 4
+      - type: grid
+        cards:
+          - type: heading
+            heading: Exterior
+            heading_style: title
+            icon: mdi:fence
+          - type: custom:mushroom-light-card
+            entity: light.adaptive_phase_dimmer_patio_light_control
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+          - type: custom:mushroom-light-card
+            entity: light.switch_patio_string_lights
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+          - type: custom:mushroom-light-card
+            entity: light.switch_patio_sconces
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+          - type: custom:mushroom-light-card
+            entity: light.control4_ea5_000fff9153a4_porte_cochere_downlights
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+          - type: custom:mushroom-light-card
+            entity: light.switch_porch_sconce
+            collapsible_controls: true
+            show_brightness_control: true
+            secondary_info: none
+            grid_options:
+              columns: 24
+        column_span: 4

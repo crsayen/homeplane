@@ -11,11 +11,13 @@ from app.schemas.actions import (
     EntityStateResponse,
     HomeAssistantServiceResult,
     RunSceneRequest,
+    SetLightStateRequest,
     SetNumberValueRequest,
     SetSwitchStateRequest,
     ToggleLightRequest,
 )
 from app.schemas.configuration import MultiRoomAudioConfig
+from app.schemas.lighting import LightingConfig
 from app.services.orchestrator import HomeOrchestrator
 
 router = APIRouter(prefix="/api", tags=["orchestration"])
@@ -58,6 +60,18 @@ async def update_audio_config(request: Request, payload: MultiRoomAudioConfig) -
     return await request.app.state.audio_config_store.save(payload)
 
 
+@router.get("/lighting-config", response_model=LightingConfig, dependencies=[Depends(require_api_key)])
+async def get_lighting_config(request: Request) -> LightingConfig:
+    await request.app.state.rate_limiter.check(request)
+    return await request.app.state.lighting_config_store.load()
+
+
+@router.put("/lighting-config", response_model=LightingConfig, dependencies=[Depends(require_api_key)])
+async def update_lighting_config(request: Request, payload: LightingConfig) -> LightingConfig:
+    await request.app.state.rate_limiter.check(request)
+    return await request.app.state.lighting_config_store.save(payload)
+
+
 @router.post(
     "/lights/{entity_id}/toggle",
     response_model=list[HomeAssistantServiceResult],
@@ -72,6 +86,22 @@ async def toggle_light(
     validate_entity_id(entity_id)
     await request.app.state.rate_limiter.check(request)
     return await orchestrator.toggle_light(entity_id=entity_id, transition_seconds=payload.transition_seconds)
+
+
+@router.post(
+    "/lights/{entity_id}/state",
+    response_model=list[HomeAssistantServiceResult],
+    dependencies=[Depends(require_api_key)],
+)
+async def set_light_state(
+    entity_id: str,
+    payload: SetLightStateRequest,
+    request: Request,
+    orchestrator: HomeOrchestrator = Depends(get_orchestrator),
+) -> list[HomeAssistantServiceResult]:
+    validate_entity_domain(entity_id, "light")
+    await request.app.state.rate_limiter.check(request)
+    return await orchestrator.set_light_state(entity_id=entity_id, is_on=payload.is_on)
 
 
 @router.post(
