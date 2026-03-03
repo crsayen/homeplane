@@ -5,6 +5,8 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      CONFIG_STORE_BACKEND: ${CONFIG_STORE_BACKEND:-file}
+      SQLITE_CONFIG_DB_PATH: /data/homeplane-config.sqlite3
       AUDIO_CONFIG_PATH: /data/multi-room-audio.config.json
       AUDIO_CONFIG_SEED_PATH: /app/data/multi-room-audio.config.json
       LIGHTING_CONFIG_PATH: /data/lighting.config.json

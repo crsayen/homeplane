@@ -128,6 +128,56 @@ docker compose --env-file docker-compose.env up -d --build
 
 Room updates done through the UI `Config` editor are written to the backend config volume and apply immediately. No rebuild/redeploy is required for adding/removing rooms.
 
+### SQLite config storage (optional)
+
+Homeplane supports storing `audio-config` and `lighting-config` in SQLite instead of JSON files.
+
+When `CONFIG_STORE_BACKEND=sqlite`, Homeplane uses one table (`config_store`) in the database file and stores JSON payloads keyed by config name.
+
+On first load of each config key, Homeplane will seed from:
+- `AUDIO_CONFIG_SEED_PATH` for audio
+- `LIGHTING_CONFIG_SEED_PATH` for lighting
+
+#### Local setup
+
+In `backend/.env`:
+
+```env
+CONFIG_STORE_BACKEND=sqlite
+SQLITE_CONFIG_DB_PATH=./data/homeplane-config.sqlite3
+```
+
+Then restart backend:
+
+```bash
+source /Users/chrissayen/dev/homeplane/venv/bin/activate
+cd /Users/chrissayen/dev/homeplane/backend
+uvicorn app.main:app --reload --port 8080
+```
+
+#### Docker setup
+
+In `backend/.env` on your server:
+
+```env
+CONFIG_STORE_BACKEND=sqlite
+```
+
+`docker-compose.yml` already maps SQLite DB path to `/data/homeplane-config.sqlite3`, which is on the persistent `homeplane_config` volume.
+
+Rebuild/restart:
+
+```bash
+docker compose --env-file docker-compose.env up -d --build
+```
+
+Inspect DB on server (optional):
+
+```bash
+sqlite3 /var/lib/docker/volumes/<project>_homeplane_config/_data/homeplane-config.sqlite3 ".tables"
+sqlite3 /var/lib/docker/volumes/<project>_homeplane_config/_data/homeplane-config.sqlite3 "select key, updated_at from config_store;"
+```
+
 ## Implemented endpoints
 
 All endpoints require `x-homeplane-key` header.

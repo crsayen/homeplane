@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   EntityStateResponse,
@@ -34,6 +34,67 @@ function toDisplayVolume(value: unknown): string {
     return "--";
   }
   return `${Math.round(asNumber * 100)}%`;
+}
+
+function ScrollingRoomName({ name }: { name: string }) {
+  const containerRef = useRef<HTMLSpanElement | null>(null);
+  const textRef = useRef<HTMLSpanElement | null>(null);
+  const [overflowPx, setOverflowPx] = useState(0);
+  const [textWidthPx, setTextWidthPx] = useState(0);
+
+  useEffect(() => {
+    function measure() {
+      const container = containerRef.current;
+      const text = textRef.current;
+      if (!container || !text) {
+        return;
+      }
+      const measuredTextWidth = Math.ceil(text.scrollWidth);
+      setTextWidthPx(measuredTextWidth);
+      setOverflowPx(Math.max(0, measuredTextWidth - container.clientWidth));
+    }
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+    if (textRef.current) {
+      observer.observe(textRef.current);
+    }
+    return () => observer.disconnect();
+  }, [name]);
+
+  const isTruncated = overflowPx > 0;
+  const style = (
+    isTruncated
+      ? {
+          ["--light-name-shift" as string]: `${Math.max(1, textWidthPx)}px`,
+          ["--light-name-duration" as string]: `${Math.max(2.2, textWidthPx / 52)}s`,
+        }
+      : {}
+  ) as CSSProperties;
+
+  return (
+    <span ref={containerRef} className={isTruncated ? "light-name-fade light-name-fade-both" : "light-name-fade"}>
+      {isTruncated ? (
+        <span style={style} className="light-name-scroll-track">
+          <span ref={textRef} className="light-name-copy">
+            {name}
+            {"\u00a0\u00a0"}
+          </span>
+          <span className="light-name-copy" aria-hidden="true">
+            {name}
+            {"\u00a0\u00a0"}
+          </span>
+        </span>
+      ) : (
+        <span ref={textRef} className="light-name-static">
+          {name}
+        </span>
+      )}
+    </span>
+  );
 }
 
 export function MultiRoomAudioDashboard({
@@ -429,19 +490,21 @@ export function MultiRoomAudioDashboard({
               return (
                 <section
                   key={room.name}
-                  className="hp-room-card animate-fade-up flex h-16 items-center rounded-2xl border border-slate-900/20 bg-white/92 px-3 shadow-lg shadow-slate-900/15 ring-1 ring-slate-900/5 dark:border-white/20 dark:bg-black/88 dark:shadow-black/70 dark:ring-white/10"
+                  className="hp-room-card animate-fade-up grid h-16 grid-cols-3 items-center gap-2 rounded-2xl border border-slate-900/20 bg-white/92 px-3 shadow-lg shadow-slate-900/15 ring-1 ring-slate-900/5 dark:border-white/20 dark:bg-black/88 dark:shadow-black/70 dark:ring-white/10"
                   style={{ animationDelay: `${index * 70}ms` }}
                 >
                   <button
                     type="button"
                     onClick={() => void setSwitch(room, !switchOn)}
-                    className="min-w-0 shrink-0 text-left text-base font-semibold leading-none text-slate-900 dark:text-slate-100"
+                    className="min-w-0 text-left text-base font-semibold leading-none text-slate-900 dark:text-slate-100"
                   >
-                    <span className="block truncate">{room.name}</span>
+                    <span className="block">
+                      <ScrollingRoomName name={room.name} />
+                    </span>
                   </button>
 
                   {switchOn ? (
-                    <div className="ml-3 min-w-0 flex-1">
+                    <div className="col-span-2 min-w-0">
                       <input
                         id={`volume-min-${room.name}`}
                         className="volume-slider"
@@ -473,7 +536,7 @@ export function MultiRoomAudioDashboard({
                       />
                     </div>
                   ) : (
-                    <span className="ml-auto text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+                    <span className="col-span-2 justify-self-end text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
                       Off
                     </span>
                   )}

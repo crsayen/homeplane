@@ -21,6 +21,8 @@ class Settings(BaseSettings):
 
     rate_limit_requests: int = Field(default=60, alias="RATE_LIMIT_REQUESTS")
     rate_limit_window_seconds: int = Field(default=60, alias="RATE_LIMIT_WINDOW_SECONDS")
+    config_store_backend: str = Field(default="file", alias="CONFIG_STORE_BACKEND")
+    sqlite_config_db_path: str = Field(default="./data/homeplane-config.sqlite3", alias="SQLITE_CONFIG_DB_PATH")
     audio_config_path: str = Field(default="./data/multi-room-audio.config.json", alias="AUDIO_CONFIG_PATH")
     audio_config_seed_path: str = Field(
         default="./data/multi-room-audio.config.json",
@@ -40,6 +42,14 @@ class Settings(BaseSettings):
         if isinstance(value, list):
             return [cls._normalize_origin(origin) for origin in value if origin and cls._normalize_origin(origin)]
         return [cls._normalize_origin(origin) for origin in value.split(",") if cls._normalize_origin(origin)]
+
+    @field_validator("config_store_backend", mode="before")
+    @classmethod
+    def parse_config_store_backend(cls, value: str | None) -> str:
+        backend = (value or "file").strip().lower()
+        if backend not in {"file", "sqlite"}:
+            raise ValueError("CONFIG_STORE_BACKEND must be 'file' or 'sqlite'")
+        return backend
 
     @staticmethod
     def _normalize_origin(origin: str) -> str:

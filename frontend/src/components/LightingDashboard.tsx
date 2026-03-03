@@ -427,6 +427,36 @@ export function LightingDashboard({
     }
   }
 
+  async function setRoomLights(room: RoomLightingConfig, isOn: boolean): Promise<void> {
+    const lights = room.lights.map((light) => normalizeLightConfig(light));
+
+    for (const light of lights) {
+      const timeoutMs = Math.max(0, Math.round(((light.update_timeout_seconds ?? 0) as number) * 1000));
+      if (timeoutMs > 0) {
+        clearPendingTransition(light.entity_id);
+        setPendingTransitions((previous) => ({
+          ...previous,
+          [light.entity_id]: { targetState: isOn ? "on" : "off", timeoutMs },
+        }));
+        pendingTimeoutsRef.current[light.entity_id] = window.setTimeout(() => {
+          clearPendingTransition(light.entity_id);
+          void refreshLightState(light.entity_id);
+        }, timeoutMs);
+      }
+    }
+
+    try {
+      await Promise.all(lights.map(async (light) => client.setLightState(light.entity_id, { is_on: isOn })));
+
+      const immediate = lights.filter((light) => !light.update_timeout_seconds).map((light) => light.entity_id);
+      await Promise.all(immediate.map(async (entityId) => refreshLightState(entityId)));
+    } catch {
+      for (const light of lights) {
+        clearPendingTransition(light.entity_id);
+      }
+    }
+  }
+
   async function saveConfigFromEditor(): Promise<void> {
     setConfigSaveError(null);
     let parsed: LightingConfig;
@@ -551,12 +581,33 @@ export function LightingDashboard({
               key={room.name}
               className="hp-room-card rounded-2xl border border-slate-900/20 bg-white/92 p-3.5 shadow-lg shadow-slate-900/15 ring-1 ring-slate-900/5 backdrop-blur-sm dark:border-white/20 dark:bg-black/88 dark:shadow-black/70 dark:ring-white/10 sm:rounded-3xl sm:p-4"
             >
+              {(() => {
+                const onCount = roomOnCount(room);
+                const anyOn = onCount > 0;
+                const roomHasPending = room.lights.some((light) => {
+                  const entityId = normalizeLightConfig(light).entity_id;
+                  return Boolean(pendingTransitions[entityId]);
+                });
+
+                return (
               <div className="mb-2.5 flex items-center justify-between">
                 <h2 className="text-[1.15rem] font-semibold leading-none text-slate-900 dark:text-slate-100 sm:text-2xl">{room.name}</h2>
-                <span className="hp-nonfunctional rounded-full bg-slate-500/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">
-                  {roomOnCount(room)}/{room.lights.length} on
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={roomHasPending}
+                    onClick={() => void setRoomLights(room, !anyOn)}
+                    className="rounded-md border border-slate-300/80 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-700 transition hover:border-amber-400 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-45 dark:border-white/15 dark:text-slate-300 dark:hover:border-amber-500 dark:hover:text-amber-300"
+                  >
+                    {anyOn ? "All Off" : "All On"}
+                  </button>
+                  <span className="hp-nonfunctional rounded-full bg-slate-500/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">
+                    {onCount}/{room.lights.length} on
+                  </span>
+                </div>
               </div>
+                );
+              })()}
 
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
                 {room.lights.map((rawLight) => {
