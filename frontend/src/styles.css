@@ -125,11 +125,6 @@
     -webkit-touch-callout: none;
   }
 
-  .hp-light-row-dimmable {
-    touch-action: none;
-    overscroll-behavior: contain;
-  }
-
   [data-ui-density="normal"] .hp-light-grid {
     grid-template-columns: repeat(1, minmax(0, 1fr));
   }

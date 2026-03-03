@@ -20,10 +20,12 @@ type PendingTransition = {
 type PendingTransitionMap = Record<string, PendingTransition | undefined>;
 type DragState = {
   entityId: string;
+  pointerId: number;
   startY: number;
   startX: number;
   startBrightnessPct: number;
   currentBrightnessPct: number;
+  holdReady: boolean;
   isDragging: boolean;
   meterSide: "left" | "right";
 };
@@ -35,6 +37,10 @@ type NormalizedLight = {
   update_timeout_seconds?: number;
   dimmable?: boolean;
 };
+
+const DRAG_HOLD_DELAY_MS = 280;
+const DRAG_CANCEL_DISTANCE_PX = 8;
+const DRAG_PIXELS_PER_PERCENT = 1.6;
 
 function toWebSocketUrl(apiBaseUrl: string): string {
   const parsed = new URL(apiBaseUrl);
@@ -271,7 +277,9 @@ export function LightingDashboard({
   const webSocketRef = useRef<WebSocket | null>(null);
   const pendingTimeoutsRef = useRef<Record<string, number>>({});
   const suppressClickRef = useRef<Set<string>>(new Set());
+  const suppressClickTimeoutsRef = useRef<Record<string, number>>({});
   const dragThrottleRef = useRef<Record<string, number>>({});
+  const dragHoldTimerRef = useRef<number | null>(null);
 
   const lightConfigByEntity = useMemo(() => {
     const mapping: Record<string, NormalizedLight> = {};
@@ -301,6 +309,23 @@ export function LightingDashboard({
       delete next[entityId];
       return next;
     });
+  }
+
+  function clearClickSuppression(entityId: string): void {
+    const timeoutId = suppressClickTimeoutsRef.current[entityId];
+    if (timeoutId !== undefined) {
+      window.clearTimeout(timeoutId);
+      delete suppressClickTimeoutsRef.current[entityId];
+    }
+    suppressClickRef.current.delete(entityId);
+  }
+
+  function queueClickSuppression(entityId: string, ttlMs = 450): void {
+    clearClickSuppression(entityId);
+    suppressClickRef.current.add(entityId);
+    suppressClickTimeoutsRef.current[entityId] = window.setTimeout(() => {
+      clearClickSuppression(entityId);
+    }, ttlMs);
   }
 
   async function sendBrightnessUpdate(entityId: string, brightnessPct: number): Promise<void> {
@@ -374,10 +399,19 @@ export function LightingDashboard({
 
   useEffect(() => {
     return () => {
+      if (dragHoldTimerRef.current !== null) {
+        window.clearTimeout(dragHoldTimerRef.current);
+        dragHoldTimerRef.current = null;
+      }
       for (const timeoutId of Object.values(pendingTimeoutsRef.current)) {
         window.clearTimeout(timeoutId);
       }
       pendingTimeoutsRef.current = {};
+      for (const timeoutId of Object.values(suppressClickTimeoutsRef.current)) {
+        window.clearTimeout(timeoutId);
+      }
+      suppressClickTimeoutsRef.current = {};
+      suppressClickRef.current.clear();
     };
   }, []);
 
@@ -448,11 +482,28 @@ export function LightingDashboard({
         if (!previous) {
           return previous;
         }
+        if (event.pointerId !== previous.pointerId) {
+          return previous;
+        }
 
         const deltaY = previous.startY - event.clientY;
         const deltaX = Math.abs(event.clientX - previous.startX);
-        const hasMovedEnough = Math.abs(deltaY) > 8 || deltaX > 8;
-        const shouldDrag = previous.isDragging || (hasMovedEnough && Math.abs(deltaY) >= deltaX);
+        const hasMovedEnough = Math.abs(deltaY) > DRAG_CANCEL_DISTANCE_PX || deltaX > DRAG_CANCEL_DISTANCE_PX;
+        const verticalIntent = Math.abs(deltaY) >= deltaX;
+
+        if (!previous.holdReady) {
+          if (hasMovedEnough) {
+            if (dragHoldTimerRef.current !== null) {
+              window.clearTimeout(dragHoldTimerRef.current);
+              dragHoldTimerRef.current = null;
+            }
+            queueClickSuppression(previous.entityId);
+            return null;
+          }
+          return previous;
+        }
+
+        const shouldDrag = previous.isDragging || (hasMovedEnough && verticalIntent);
 
         if (!shouldDrag) {
           return previous;
@@ -462,7 +513,7 @@ export function LightingDashboard({
           event.preventDefault();
         }
 
-        const nextPct = clampPercent(previous.startBrightnessPct + deltaY / 1.6);
+        const nextPct = clampPercent(previous.startBrightnessPct + deltaY / DRAG_PIXELS_PER_PERCENT);
         if (!previous.isDragging) {
           suppressClickRef.current.add(previous.entityId);
         }
@@ -473,11 +524,18 @@ export function LightingDashboard({
       });
     }
 
-    function finishDrag() {
-      if (!dragState) {
+    function finishDrag(event: PointerEvent) {
+      if (!dragState || event.pointerId !== dragState.pointerId) {
         return;
       }
-      if (dragState.isDragging) {
+      if (dragHoldTimerRef.current !== null) {
+        window.clearTimeout(dragHoldTimerRef.current);
+        dragHoldTimerRef.current = null;
+      }
+      if (dragState.holdReady) {
+        queueClickSuppression(dragState.entityId);
+      }
+      if (dragState.holdReady && dragState.isDragging) {
         const finalPct = dragState.currentBrightnessPct;
         const entityId = dragState.entityId;
         void client.setLightState(entityId, { is_on: true, brightness_pct: finalPct });
@@ -740,32 +798,42 @@ export function LightingDashboard({
                       type="button"
                       disabled={isBusy || isPending}
                       onPointerDown={(event) => {
-                        if (isBusy || isPending || !isDimmable) {
+                        if (isBusy || isPending || !isDimmable || !event.isPrimary || dragState !== null) {
                           return;
                         }
-                        event.preventDefault();
-                        try {
-                          (event.currentTarget as HTMLButtonElement).setPointerCapture(event.pointerId);
-                        } catch {
-                          // Ignore if pointer capture is unavailable.
+                        if (dragHoldTimerRef.current !== null) {
+                          window.clearTimeout(dragHoldTimerRef.current);
+                          dragHoldTimerRef.current = null;
                         }
                         const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
                         const meterSide: "left" | "right" = rect.right + 96 < window.innerWidth ? "right" : "left";
                         const currentPct = dragBrightness[light.entity_id] ?? brightnessPercentFromState(state);
                         setDragState({
                           entityId: light.entity_id,
+                          pointerId: event.pointerId,
                           startY: event.clientY,
                           startX: event.clientX,
                           startBrightnessPct: currentPct,
                           currentBrightnessPct: currentPct,
+                          holdReady: false,
                           isDragging: false,
                           meterSide,
                         });
+                        dragHoldTimerRef.current = window.setTimeout(() => {
+                          setDragState((previous) => {
+                            if (!previous || previous.entityId !== light.entity_id) {
+                              return previous;
+                            }
+                            suppressClickRef.current.add(previous.entityId);
+                            return { ...previous, holdReady: true };
+                          });
+                          dragHoldTimerRef.current = null;
+                        }, DRAG_HOLD_DELAY_MS);
                       }}
                       onClick={() =>
                         {
                           if (suppressClickRef.current.has(light.entity_id)) {
-                            suppressClickRef.current.delete(light.entity_id);
+                            clearClickSuppression(light.entity_id);
                             return;
                           }
                           void toggleLight(
@@ -775,7 +843,7 @@ export function LightingDashboard({
                           );
                         }
                       }
-                      className={`hp-light-row ${isDimmable ? "hp-light-row-dimmable" : ""} group relative flex h-14 w-full items-center gap-1.5 rounded-xl border px-3 text-left transition disabled:cursor-not-allowed disabled:opacity-55 ${
+                      className={`hp-light-row group relative flex h-14 w-full items-center gap-1.5 rounded-xl border px-3 text-left transition disabled:cursor-not-allowed disabled:opacity-55 ${
                         isOn
                           ? "border-amber-300/75 bg-amber-100/85 text-slate-900 ring-1 ring-amber-300/55 shadow-[0_0_20px_rgba(251,191,36,0.22)] dark:border-amber-500/55 dark:bg-amber-900/45 dark:text-amber-100 dark:ring-amber-500/25"
                           : "border-slate-300/80 bg-slate-200/75 text-slate-700 hover:border-amber-300 hover:bg-amber-50/60 dark:border-white/10 dark:bg-[#0a0a0a]/95 dark:text-slate-300 dark:hover:border-amber-900 dark:hover:bg-[#0d0d0d]"
@@ -820,7 +888,7 @@ export function LightingDashboard({
                           <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-500/45 border-t-slate-900 dark:border-slate-400/30 dark:border-t-slate-100" />
                         </span>
                       ) : null}
-                      {dragState?.entityId === light.entity_id && dragState.isDragging ? (
+                      {dragState?.entityId === light.entity_id && dragState.holdReady ? (
                         <div
                           className={`absolute top-1/2 z-20 h-28 w-10 -translate-y-1/2 rounded-xl border border-slate-300/80 bg-white p-1 shadow-lg dark:border-white/15 dark:bg-[#090909] ${
                             dragState.meterSide === "right" ? "left-[calc(100%+0.35rem)]" : "right-[calc(100%+0.35rem)]"
