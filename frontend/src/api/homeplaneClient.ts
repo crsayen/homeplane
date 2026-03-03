@@ -22,6 +22,16 @@ export interface SetNumberValueRequest {
   value: number;
 }
 
+export interface RoomAudioConfig {
+  name: string;
+  switch: string;
+  number: string;
+}
+
+export interface MultiRoomAudioConfig {
+  rooms: RoomAudioConfig[];
+}
+
 export class HomeplaneClient {
   private readonly baseUrl: string;
   private readonly apiKey: string;
@@ -61,6 +71,17 @@ export class HomeplaneClient {
   async setNumberValue(entityId: string, payload: SetNumberValueRequest): Promise<unknown[]> {
     return this.request<unknown[]>(`/api/numbers/${entityId}/value`, {
       method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getAudioConfig(): Promise<MultiRoomAudioConfig> {
+    return this.request<MultiRoomAudioConfig>("/api/audio-config", { method: "GET" });
+  }
+
+  async updateAudioConfig(payload: MultiRoomAudioConfig): Promise<MultiRoomAudioConfig> {
+    return this.request<MultiRoomAudioConfig>("/api/audio-config", {
+      method: "PUT",
       body: JSON.stringify(payload),
     });
   }

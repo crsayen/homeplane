@@ -44,20 +44,32 @@ class FakeHAClient:
 
 @pytest.fixture
 def app_client() -> tuple[TestClient, FakeHAClient]:
+    config_file = Path(__file__).resolve().parent / "test-audio-config.json"
+    config_file.write_text(
+        '{\n  "rooms": [\n    {"name": "Garage", "switch": "switch.garage_power", "number": "number.garage_volume"}\n  ]\n}',
+        encoding="utf-8",
+    )
+
     os.environ["HA_BASE_URL"] = "http://homeassistant.local:8123"
     os.environ["HA_TOKEN"] = "test-token"
     os.environ["APP_API_KEY"] = "test-key"
     os.environ["ALLOWED_ORIGINS"] = "http://localhost:5173"
     os.environ["RATE_LIMIT_REQUESTS"] = "100"
     os.environ["RATE_LIMIT_WINDOW_SECONDS"] = "60"
+    os.environ["AUDIO_CONFIG_PATH"] = str(config_file)
 
+    import app.core.config as config_module
     import app.main as main_module
 
+    config_module.get_settings.cache_clear()
     main_module = importlib.reload(main_module)
     fake_ha = FakeHAClient()
     with TestClient(main_module.app) as client:
         main_module.app.state.ha_client = fake_ha
         yield client, fake_ha
+
+    if config_file.exists():
+        config_file.unlink()
 
 
 def test_health_requires_api_key(app_client: tuple[TestClient, FakeHAClient]) -> None:
@@ -174,3 +186,28 @@ def test_websocket_streams_entity_updates(app_client: tuple[TestClient, FakeHACl
     assert payload["type"] == "state_changed"
     assert payload["state"]["entity_id"] == "switch.garage_power"
     assert payload["state"]["state"] == "on"
+
+
+def test_get_audio_config_returns_file_content(app_client: tuple[TestClient, FakeHAClient]) -> None:
+    client, _ = app_client
+    response = client.get("/api/audio-config", headers={"x-homeplane-key": "test-key"})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["rooms"]) == 1
+    assert body["rooms"][0]["name"] == "Garage"
+
+
+def test_put_audio_config_persists_content(app_client: tuple[TestClient, FakeHAClient]) -> None:
+    client, _ = app_client
+    payload = {
+        "rooms": [
+            {"name": "Office", "switch": "switch.office_power", "number": "number.office_volume"},
+            {"name": "Den", "switch": "switch.den_power", "number": "number.den_volume"},
+        ]
+    }
+    write_response = client.put("/api/audio-config", headers={"x-homeplane-key": "test-key"}, json=payload)
+    assert write_response.status_code == 200
+
+    read_response = client.get("/api/audio-config", headers={"x-homeplane-key": "test-key"})
+    assert read_response.status_code == 200
+    assert read_response.json() == payload

@@ -21,6 +21,11 @@ class Settings(BaseSettings):
 
     rate_limit_requests: int = Field(default=60, alias="RATE_LIMIT_REQUESTS")
     rate_limit_window_seconds: int = Field(default=60, alias="RATE_LIMIT_WINDOW_SECONDS")
+    audio_config_path: str = Field(default="./data/multi-room-audio.config.json", alias="AUDIO_CONFIG_PATH")
+    audio_config_seed_path: str = Field(
+        default="./data/multi-room-audio.config.json",
+        alias="AUDIO_CONFIG_SEED_PATH",
+    )
 
     @field_validator("allowed_origins", mode="before")
     @classmethod

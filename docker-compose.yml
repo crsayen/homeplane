@@ -4,6 +4,10 @@ services:
       context: ./backend
     env_file:
       - ./backend/.env
+    environment:
+      AUDIO_CONFIG_PATH: /data/multi-room-audio.config.json
+    volumes:
+      - homeplane_config:/data
     restart: unless-stopped
     networks:
       - homeplane
@@ -46,3 +50,4 @@ networks:
 volumes:
   caddy_data:
   caddy_config:
+  homeplane_config:

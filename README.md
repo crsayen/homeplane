@@ -67,6 +67,7 @@ Architecture:
 - `caddy` container: host-based routing + TLS termination (LAN certificates)
 - `web` container: serves built React app with Nginx and proxies `/api` + `/api/ws/*` to backend
 - `backend` container: FastAPI/Uvicorn service (internal Docker network only)
+- `homeplane_config` Docker volume: persists editable room configuration at `/data/multi-room-audio.config.json`
 
 ### 1. Configure backend secrets
 
@@ -125,6 +126,8 @@ Browse to `https://<your-hostname>/` (for example `https://homeplane.lan/`).
 docker compose --env-file docker-compose.env up -d --build
 ```
 
+Room updates done through the UI `Config` editor are written to the backend config volume and apply immediately. No rebuild/redeploy is required for adding/removing rooms.
+
 ## Implemented endpoints
 
 All endpoints require `x-homeplane-key` header.
@@ -135,6 +138,8 @@ All endpoints require `x-homeplane-key` header.
 - `POST /api/switches/{entity_id}/state`
 - `POST /api/numbers/{entity_id}/value`
 - `GET /api/health`
+- `GET /api/audio-config`
+- `PUT /api/audio-config`
 - `WS /api/ws/entities?api_key=...&entity_ids=switch.a,number.b`
 
 ## Notes
@@ -143,40 +148,14 @@ All endpoints require `x-homeplane-key` header.
 - Basic in-memory per-route+API-key rate limiting is enabled.
 - CORS is configured from `ALLOWED_ORIGINS`.
 - Dashboard subscribes to Home Assistant `state_changed` events through backend websocket streaming.
+- Room config is stored server-side and can be edited from the dashboard UI.
 
 ## Multi-Room Audio Dashboard
 
-Use [multi-room-audio.config.json](/Users/chrissayen/dev/homeplane/frontend/public/multi-room-audio.config.json) to define rooms and their entities.
+Room config is loaded from backend `GET /api/audio-config` and edited in-app via the `Config` button.
 
 Dashboard component:
 - [MultiRoomAudioDashboard.tsx](/Users/chrissayen/dev/homeplane/frontend/src/components/MultiRoomAudioDashboard.tsx)
 - Tailwind CSS powered, mobile-first layout with light/dark/system theme toggle.
-
-React usage:
-
-```tsx
-import { MultiRoomAudioDashboard } from "./components/MultiRoomAudioDashboard";
-
-export default function App() {
-  return (
-    <MultiRoomAudioDashboard
-      apiBaseUrl={import.meta.env.VITE_HOMEPLANE_API_URL}
-      apiKey={import.meta.env.VITE_HOMEPLANE_API_KEY}
-    />
-  );
-}
-```
-
-Config shape:
-
-```json
-{
-  "rooms": [
-    {
-      "name": "Garage",
-      "switch": "switch.garage_power",
-      "number": "number.garage_volume"
-    }
-  ]
-}
-```
+Default seed file in backend image:
+- [backend/data/multi-room-audio.config.json](/Users/chrissayen/dev/homeplane/backend/data/multi-room-audio.config.json)

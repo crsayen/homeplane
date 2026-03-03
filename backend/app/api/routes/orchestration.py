@@ -1,4 +1,5 @@
 import re
+from logging import getLogger
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 
@@ -14,10 +15,12 @@ from app.schemas.actions import (
     SetSwitchStateRequest,
     ToggleLightRequest,
 )
+from app.schemas.configuration import MultiRoomAudioConfig
 from app.services.orchestrator import HomeOrchestrator
 
 router = APIRouter(prefix="/api", tags=["orchestration"])
 ENTITY_ID_PATTERN = re.compile(r"^[a-z0-9_]+\.[a-zA-Z0-9_]+$")
+logger = getLogger(__name__)
 
 
 def validate_entity_id(entity_id: str) -> str:
@@ -41,6 +44,18 @@ def validate_entity_domain(entity_id: str, expected_domain: str) -> None:
 @router.get("/health", dependencies=[Depends(require_api_key)])
 async def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.get("/audio-config", response_model=MultiRoomAudioConfig, dependencies=[Depends(require_api_key)])
+async def get_audio_config(request: Request) -> MultiRoomAudioConfig:
+    await request.app.state.rate_limiter.check(request)
+    return await request.app.state.audio_config_store.load()
+
+
+@router.put("/audio-config", response_model=MultiRoomAudioConfig, dependencies=[Depends(require_api_key)])
+async def update_audio_config(request: Request, payload: MultiRoomAudioConfig) -> MultiRoomAudioConfig:
+    await request.app.state.rate_limiter.check(request)
+    return await request.app.state.audio_config_store.save(payload)
 
 
 @router.post(
@@ -152,3 +167,10 @@ async def stream_entities(websocket: WebSocket) -> None:
             await websocket.send_json({"type": "state_changed", "state": state.model_dump()})
     except WebSocketDisconnect:
         return
+    except Exception as exc:
+        logger.exception("Websocket entity stream failed: %s", exc)
+        try:
+            await websocket.send_json({"type": "stream_error", "detail": str(exc)})
+        except Exception:
+            pass
+        await websocket.close(code=1011, reason="Entity stream failure")

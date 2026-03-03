@@ -1,16 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { EntityStateResponse, HomeplaneClient } from "../api/homeplaneClient";
-
-export interface RoomAudioConfig {
-  name: string;
-  switch: string;
-  number: string;
-}
-
-export interface MultiRoomAudioConfig {
-  rooms: RoomAudioConfig[];
-}
+import {
+  EntityStateResponse,
+  HomeplaneClient,
+  MultiRoomAudioConfig,
+  RoomAudioConfig,
+} from "../api/homeplaneClient";
 
 type RoomState = {
   loading: boolean;
@@ -22,8 +17,6 @@ type RoomState = {
 type RoomStateMap = Record<string, RoomState>;
 type StreamState = "connecting" | "live" | "reconnecting";
 type ThemeMode = "system" | "light" | "dark";
-
-const DEFAULT_CONFIG_URL = "/multi-room-audio.config.json";
 
 function toWebSocketUrl(apiBaseUrl: string): string {
   const parsed = new URL(apiBaseUrl);
@@ -64,11 +57,9 @@ function themeLabel(mode: ThemeMode): string {
 export function MultiRoomAudioDashboard({
   apiBaseUrl,
   apiKey,
-  configUrl = DEFAULT_CONFIG_URL,
 }: {
   apiBaseUrl: string;
   apiKey: string;
-  configUrl?: string;
 }) {
   const client = useMemo(() => new HomeplaneClient(apiBaseUrl, apiKey), [apiBaseUrl, apiKey]);
   const [config, setConfig] = useState<MultiRoomAudioConfig | null>(null);
@@ -79,6 +70,10 @@ export function MultiRoomAudioDashboard({
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
   const [masterVolume, setMasterVolume] = useState(0.5);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [configDraft, setConfigDraft] = useState('{\n  "rooms": []\n}');
+  const [configSaveError, setConfigSaveError] = useState<string | null>(null);
+  const [configSaving, setConfigSaving] = useState(false);
   const webSocketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -116,17 +111,10 @@ export function MultiRoomAudioDashboard({
     async function loadConfig() {
       setConfigError(null);
       try {
-        const response = await fetch(configUrl);
-        if (!response.ok) {
-          throw new Error(`Failed to load config (${response.status})`);
-        }
-        const payload = (await response.json()) as MultiRoomAudioConfig;
-        if (!payload.rooms || !Array.isArray(payload.rooms)) {
-          throw new Error("Config must include a rooms array");
-        }
-
+        const payload = await client.getAudioConfig();
         if (!cancelled) {
           setConfig(payload);
+          setConfigDraft(JSON.stringify(payload, null, 2));
         }
       } catch (error) {
         if (!cancelled) {
@@ -139,7 +127,7 @@ export function MultiRoomAudioDashboard({
     return () => {
       cancelled = true;
     };
-  }, [configUrl]);
+  }, [client]);
 
   useEffect(() => {
     if (!config) {
@@ -328,6 +316,29 @@ export function MultiRoomAudioDashboard({
     }
   }
 
+  async function saveConfigFromEditor(): Promise<void> {
+    setConfigSaveError(null);
+    let parsed: MultiRoomAudioConfig;
+    try {
+      parsed = JSON.parse(configDraft) as MultiRoomAudioConfig;
+    } catch {
+      setConfigSaveError("Config is not valid JSON.");
+      return;
+    }
+
+    setConfigSaving(true);
+    try {
+      const saved = await client.updateAudioConfig(parsed);
+      setConfig(saved);
+      setConfigDraft(JSON.stringify(saved, null, 2));
+      setEditorOpen(false);
+    } catch (error) {
+      setConfigSaveError(error instanceof Error ? error.message : "Failed to save config.");
+    } finally {
+      setConfigSaving(false);
+    }
+  }
+
   return (
     <div className="relative min-h-screen overflow-x-clip px-2.5 pb-6 pt-2.5 sm:px-6 sm:pb-10 sm:pt-4 lg:px-10">
       <div className="ambient-bg" />
@@ -345,15 +356,74 @@ export function MultiRoomAudioDashboard({
             Stream {streamState}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={() => setThemeMode((previous) => nextTheme(previous))}
-          title={`Theme ${themeLabel(themeMode)} (${resolvedTheme})`}
-          className="shrink-0 whitespace-nowrap rounded-lg border border-slate-300/80 bg-white/90 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-700 transition hover:border-cyan-400 hover:text-cyan-700 dark:border-white/15 dark:bg-black dark:text-slate-200 dark:hover:border-cyan-400 dark:hover:text-cyan-200 sm:rounded-xl sm:px-3 sm:py-2 sm:text-xs sm:tracking-[0.18em]"
-        >
-          {themeLabel(themeMode)}
-        </button>
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (config) {
+                setConfigDraft(JSON.stringify(config, null, 2));
+              }
+              setConfigSaveError(null);
+              setEditorOpen(true);
+            }}
+            className="whitespace-nowrap rounded-lg border border-slate-300/80 bg-white/90 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-700 transition hover:border-cyan-400 hover:text-cyan-700 dark:border-white/15 dark:bg-black dark:text-slate-200 dark:hover:border-cyan-400 dark:hover:text-cyan-200 sm:rounded-xl sm:px-3 sm:py-2 sm:text-xs sm:tracking-[0.18em]"
+          >
+            Config
+          </button>
+          <button
+            type="button"
+            onClick={() => setThemeMode((previous) => nextTheme(previous))}
+            title={`Theme ${themeLabel(themeMode)} (${resolvedTheme})`}
+            className="whitespace-nowrap rounded-lg border border-slate-300/80 bg-white/90 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-700 transition hover:border-cyan-400 hover:text-cyan-700 dark:border-white/15 dark:bg-black dark:text-slate-200 dark:hover:border-cyan-400 dark:hover:text-cyan-200 sm:rounded-xl sm:px-3 sm:py-2 sm:text-xs sm:tracking-[0.18em]"
+          >
+            {themeLabel(themeMode)}
+          </button>
+        </div>
       </header>
+
+      {editorOpen ? (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/55 p-3">
+          <div className="w-full max-w-3xl rounded-2xl border border-white/15 bg-[#0a0a0a] p-4 shadow-2xl shadow-black/60">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-100">Audio Config Editor</h3>
+              <button
+                type="button"
+                onClick={() => setEditorOpen(false)}
+                className="rounded-lg border border-white/15 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-slate-300 hover:border-slate-300 hover:text-slate-100"
+              >
+                Close
+              </button>
+            </div>
+            <p className="mb-2 text-xs text-slate-400">
+              Edit JSON and save to persist room config on the server.
+            </p>
+            <textarea
+              value={configDraft}
+              onChange={(event) => setConfigDraft(event.target.value)}
+              spellCheck={false}
+              className="h-72 w-full rounded-xl border border-white/10 bg-black/70 p-3 font-mono text-xs text-slate-100 outline-none ring-0 focus:border-cyan-500"
+            />
+            {configSaveError ? <p className="mt-2 text-xs text-red-300">{configSaveError}</p> : null}
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditorOpen(false)}
+                className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-slate-300 hover:border-slate-300 hover:text-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveConfigFromEditor()}
+                disabled={configSaving}
+                className="rounded-lg border border-cyan-500/50 bg-cyan-500/15 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-cyan-200 hover:bg-cyan-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {configSaving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <section className="mx-auto mb-3 w-full max-w-6xl rounded-xl border border-white/40 bg-white/75 p-3 shadow-lg shadow-cyan-900/10 backdrop-blur-xl dark:border-white/10 dark:bg-black/80 sm:mb-5 sm:rounded-2xl sm:p-4">
         <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600 dark:text-slate-300">
@@ -402,6 +472,10 @@ export function MultiRoomAudioDashboard({
       {!config ? (
         <div className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-200/80 bg-white/75 p-6 text-sm text-slate-600 backdrop-blur dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-300">
           Loading multi-room audio configuration...
+        </div>
+      ) : config.rooms.length === 0 ? (
+        <div className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-200/80 bg-white/75 p-6 text-sm text-slate-600 backdrop-blur dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-300">
+          No rooms configured yet. Open <span className="font-semibold">Config</span> to add rooms and save.
         </div>
       ) : (
         <div className="mx-auto grid w-full max-w-6xl gap-2.5 sm:gap-5 xl:grid-cols-2">
