@@ -458,6 +458,10 @@ export function LightingDashboard({
           return previous;
         }
 
+        if (event.cancelable) {
+          event.preventDefault();
+        }
+
         const nextPct = clampPercent(previous.startBrightnessPct + deltaY / 1.6);
         if (!previous.isDragging) {
           suppressClickRef.current.add(previous.entityId);
@@ -739,6 +743,12 @@ export function LightingDashboard({
                         if (isBusy || isPending || !isDimmable) {
                           return;
                         }
+                        event.preventDefault();
+                        try {
+                          (event.currentTarget as HTMLButtonElement).setPointerCapture(event.pointerId);
+                        } catch {
+                          // Ignore if pointer capture is unavailable.
+                        }
                         const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
                         const meterSide: "left" | "right" = rect.right + 96 < window.innerWidth ? "right" : "left";
                         const currentPct = dragBrightness[light.entity_id] ?? brightnessPercentFromState(state);
@@ -765,7 +775,7 @@ export function LightingDashboard({
                           );
                         }
                       }
-                      className={`hp-light-row group relative flex h-14 w-full items-center gap-1.5 rounded-xl border px-3 text-left transition disabled:cursor-not-allowed disabled:opacity-55 ${
+                      className={`hp-light-row ${isDimmable ? "hp-light-row-dimmable" : ""} group relative flex h-14 w-full items-center gap-1.5 rounded-xl border px-3 text-left transition disabled:cursor-not-allowed disabled:opacity-55 ${
                         isOn
                           ? "border-amber-300/75 bg-amber-100/85 text-slate-900 ring-1 ring-amber-300/55 shadow-[0_0_20px_rgba(251,191,36,0.22)] dark:border-amber-500/55 dark:bg-amber-900/45 dark:text-amber-100 dark:ring-amber-500/25"
                           : "border-slate-300/80 bg-slate-200/75 text-slate-700 hover:border-amber-300 hover:bg-amber-50/60 dark:border-white/10 dark:bg-[#0a0a0a]/95 dark:text-slate-300 dark:hover:border-amber-900 dark:hover:bg-[#0d0d0d]"
