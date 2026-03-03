@@ -101,7 +101,11 @@ async def set_light_state(
 ) -> list[HomeAssistantServiceResult]:
     validate_entity_domain(entity_id, "light")
     await request.app.state.rate_limiter.check(request)
-    return await orchestrator.set_light_state(entity_id=entity_id, is_on=payload.is_on)
+    return await orchestrator.set_light_state(
+        entity_id=entity_id,
+        is_on=payload.is_on,
+        brightness_pct=payload.brightness_pct,
+    )
 
 
 @router.post(

@@ -40,9 +40,16 @@ class HomeOrchestrator:
         result = await self._ha_client.call_service("switch", service, payload)
         return [HomeAssistantServiceResult.model_validate(item) for item in result]
 
-    async def set_light_state(self, entity_id: str, is_on: bool) -> list[HomeAssistantServiceResult]:
+    async def set_light_state(
+        self,
+        entity_id: str,
+        is_on: bool,
+        brightness_pct: float | None = None,
+    ) -> list[HomeAssistantServiceResult]:
         payload: dict[str, object] = {"entity_id": entity_id}
         service = "turn_on" if is_on else "turn_off"
+        if brightness_pct is not None and is_on:
+            payload["brightness_pct"] = brightness_pct
         result = await self._ha_client.call_service("light", service, payload)
         return [HomeAssistantServiceResult.model_validate(item) for item in result]
 

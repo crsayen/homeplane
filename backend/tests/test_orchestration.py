@@ -200,6 +200,20 @@ def test_set_light_state_forwards_value(app_client: tuple[TestClient, FakeHAClie
     assert fake_ha.service_calls == [("light", "turn_on", {"entity_id": "light.kitchen_main_lights"})]
 
 
+def test_set_light_state_forwards_brightness(app_client: tuple[TestClient, FakeHAClient]) -> None:
+    client, fake_ha = app_client
+    response = client.post(
+        "/api/lights/light.kitchen_main_lights/state",
+        headers={"x-homeplane-key": "test-key"},
+        json={"is_on": True, "brightness_pct": 43},
+    )
+
+    assert response.status_code == 200
+    assert fake_ha.service_calls == [
+        ("light", "turn_on", {"entity_id": "light.kitchen_main_lights", "brightness_pct": 43.0})
+    ]
+
+
 def test_websocket_streams_entity_updates(app_client: tuple[TestClient, FakeHAClient]) -> None:
     client, _ = app_client
     with client.websocket_connect("/api/ws/entities?api_key=test-key&entity_ids=switch.garage_power") as websocket:
@@ -271,6 +285,7 @@ def test_put_lighting_config_with_display_names(app_client: tuple[TestClient, Fa
                         "display_name": "Kitchen Main",
                         "icon": "mdi:chandelier",
                         "update_timeout_seconds": 8,
+                        "dimmable": True,
                     },
                     {"entity_id": "light.kitchen_sink_pendant"},
                 ],
@@ -289,5 +304,6 @@ def test_put_lighting_config_with_display_names(app_client: tuple[TestClient, Fa
         "display_name": "Kitchen Main",
         "icon": "mdi:chandelier",
         "update_timeout_seconds": 8,
+        "dimmable": True,
     }
     assert body["rooms"][0]["lights"][1]["entity_id"] == "light.kitchen_sink_pendant"

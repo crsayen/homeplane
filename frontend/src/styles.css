@@ -118,6 +118,22 @@
     white-space: nowrap;
   }
 
+  [data-ui-density="normal"] .hp-light-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+
+  @media (min-width: 640px) {
+    [data-ui-density="normal"] .hp-light-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 1024px) {
+    [data-ui-density="normal"] .hp-light-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
   @keyframes light-name-marquee {
     from {
       transform: translateX(0);

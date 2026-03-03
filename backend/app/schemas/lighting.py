@@ -16,6 +16,7 @@ class LightingEntityConfig(BaseModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=80)
     icon: str | None = Field(default=None, min_length=3, max_length=80)
     update_timeout_seconds: float | None = Field(default=None, ge=1, le=30)
+    dimmable: bool = False
 
     @model_validator(mode="after")
     def validate_entity(self) -> "LightingEntityConfig":

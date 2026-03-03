@@ -24,6 +24,7 @@ export interface SetNumberValueRequest {
 
 export interface SetLightStateRequest {
   is_on: boolean;
+  brightness_pct?: number;
 }
 
 export interface RoomAudioConfig {
@@ -46,6 +47,7 @@ export interface LightingEntityConfig {
   display_name?: string;
   icon?: string;
   update_timeout_seconds?: number;
+  dimmable?: boolean;
 }
 
 export interface LightingConfig {

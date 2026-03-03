@@ -18,12 +18,22 @@ type PendingTransition = {
   timeoutMs: number;
 };
 type PendingTransitionMap = Record<string, PendingTransition | undefined>;
+type DragState = {
+  entityId: string;
+  startY: number;
+  startX: number;
+  startBrightnessPct: number;
+  currentBrightnessPct: number;
+  isDragging: boolean;
+  meterSide: "left" | "right";
+};
 
 type NormalizedLight = {
   entity_id: string;
   display_name?: string;
   icon?: string;
   update_timeout_seconds?: number;
+  dimmable?: boolean;
 };
 
 function toWebSocketUrl(apiBaseUrl: string): string {
@@ -32,6 +42,25 @@ function toWebSocketUrl(apiBaseUrl: string): string {
   parsed.pathname = "/api/ws/entities";
   parsed.search = "";
   return parsed.toString();
+}
+
+function clampPercent(value: number): number {
+  return Math.max(1, Math.min(100, Math.round(value)));
+}
+
+function brightnessPercentFromState(state?: EntityStateResponse): number {
+  const brightnessPct = Number(state?.attributes?.brightness_pct);
+  if (Number.isFinite(brightnessPct)) {
+    return clampPercent(brightnessPct);
+  }
+  const brightnessRaw = Number(state?.attributes?.brightness);
+  if (Number.isFinite(brightnessRaw)) {
+    return clampPercent((brightnessRaw / 255) * 100);
+  }
+  if (state?.state === "on") {
+    return 100;
+  }
+  return 50;
 }
 
 function normalizePath(pathname: string): string {
@@ -50,6 +79,7 @@ function normalizeLightConfig(light: string | LightingEntityConfig): NormalizedL
     display_name: light.display_name,
     icon: light.icon,
     update_timeout_seconds: light.update_timeout_seconds,
+    dimmable: light.dimmable,
   };
 }
 
@@ -232,12 +262,16 @@ export function LightingDashboard({
   const [streamState, setStreamState] = useState<StreamState>("connecting");
   const [busyEntityId, setBusyEntityId] = useState<string | null>(null);
   const [pendingTransitions, setPendingTransitions] = useState<PendingTransitionMap>({});
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const [dragBrightness, setDragBrightness] = useState<Record<string, number | undefined>>({});
   const [editorOpen, setEditorOpen] = useState(false);
   const [configDraft, setConfigDraft] = useState('{\n  "rooms": []\n}');
   const [configSaveError, setConfigSaveError] = useState<string | null>(null);
   const [configSaving, setConfigSaving] = useState(false);
   const webSocketRef = useRef<WebSocket | null>(null);
   const pendingTimeoutsRef = useRef<Record<string, number>>({});
+  const suppressClickRef = useRef<Set<string>>(new Set());
+  const dragThrottleRef = useRef<Record<string, number>>({});
 
   const lightConfigByEntity = useMemo(() => {
     const mapping: Record<string, NormalizedLight> = {};
@@ -267,6 +301,16 @@ export function LightingDashboard({
       delete next[entityId];
       return next;
     });
+  }
+
+  async function sendBrightnessUpdate(entityId: string, brightnessPct: number): Promise<void> {
+    const now = Date.now();
+    const last = dragThrottleRef.current[entityId] ?? 0;
+    if (now - last < 120) {
+      return;
+    }
+    dragThrottleRef.current[entityId] = now;
+    await client.setLightState(entityId, { is_on: true, brightness_pct: brightnessPct });
   }
 
   async function refreshLightState(entityId: string): Promise<void> {
@@ -397,6 +441,73 @@ export function LightingDashboard({
       }
     };
   }, [apiBaseUrl, apiKey, config]);
+
+  useEffect(() => {
+    function onPointerMove(event: PointerEvent) {
+      setDragState((previous) => {
+        if (!previous) {
+          return previous;
+        }
+
+        const deltaY = previous.startY - event.clientY;
+        const deltaX = Math.abs(event.clientX - previous.startX);
+        const hasMovedEnough = Math.abs(deltaY) > 8 || deltaX > 8;
+        const shouldDrag = previous.isDragging || (hasMovedEnough && Math.abs(deltaY) >= deltaX);
+
+        if (!shouldDrag) {
+          return previous;
+        }
+
+        const nextPct = clampPercent(previous.startBrightnessPct + deltaY / 1.6);
+        if (!previous.isDragging) {
+          suppressClickRef.current.add(previous.entityId);
+        }
+
+        setDragBrightness((old) => ({ ...old, [previous.entityId]: nextPct }));
+        void sendBrightnessUpdate(previous.entityId, nextPct);
+        return { ...previous, isDragging: true, currentBrightnessPct: nextPct };
+      });
+    }
+
+    function finishDrag() {
+      if (!dragState) {
+        return;
+      }
+      if (dragState.isDragging) {
+        const finalPct = dragState.currentBrightnessPct;
+        const entityId = dragState.entityId;
+        void client.setLightState(entityId, { is_on: true, brightness_pct: finalPct });
+        setLightStates((previous) => ({
+          ...previous,
+          [entityId]: {
+            ...(previous[entityId] ?? {
+              entity_id: entityId,
+              state: "on",
+              attributes: {},
+              last_changed: null,
+              last_updated: null,
+            }),
+            state: "on",
+            attributes: {
+              ...(previous[entityId]?.attributes ?? {}),
+              brightness_pct: finalPct,
+              brightness: Math.round((finalPct / 100) * 255),
+            },
+          },
+        }));
+      }
+      setDragState(null);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", finishDrag);
+    window.addEventListener("pointercancel", finishDrag);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", finishDrag);
+      window.removeEventListener("pointercancel", finishDrag);
+    };
+  }, [client, dragState]);
 
   async function toggleLight(lightId: string, isOn: boolean, timeoutSeconds?: number): Promise<void> {
     const targetState: "on" | "off" = isOn ? "off" : "on";
@@ -529,7 +640,7 @@ export function LightingDashboard({
             <p className="mb-2 text-xs text-slate-400">
               Lights can be strings or objects: {" "}
               {
-                '{"entity_id":"light.kitchen","display_name":"Kitchen Main","icon":"mdi:chandelier","update_timeout_seconds":8}'
+                '{"entity_id":"light.kitchen","display_name":"Kitchen Main","icon":"mdi:chandelier","update_timeout_seconds":8,"dimmable":true}'
               }
             </p>
             <textarea
@@ -609,7 +720,7 @@ export function LightingDashboard({
                 );
               })()}
 
-              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
+              <div className="hp-light-grid grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
                 {room.lights.map((rawLight) => {
                   const light = normalizeLightConfig(rawLight);
                   const state = lightStates[light.entity_id];
@@ -617,22 +728,46 @@ export function LightingDashboard({
                   const isBusy = busyEntityId === light.entity_id;
                   const pending = pendingTransitions[light.entity_id];
                   const isPending = Boolean(pending);
+                  const isDimmable = lightConfigByEntity[light.entity_id]?.dimmable === true;
 
                   return (
                     <button
                       key={light.entity_id}
                       type="button"
                       disabled={isBusy || isPending}
+                      onPointerDown={(event) => {
+                        if (isBusy || isPending || !isDimmable) {
+                          return;
+                        }
+                        const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                        const meterSide: "left" | "right" = rect.right + 96 < window.innerWidth ? "right" : "left";
+                        const currentPct = dragBrightness[light.entity_id] ?? brightnessPercentFromState(state);
+                        setDragState({
+                          entityId: light.entity_id,
+                          startY: event.clientY,
+                          startX: event.clientX,
+                          startBrightnessPct: currentPct,
+                          currentBrightnessPct: currentPct,
+                          isDragging: false,
+                          meterSide,
+                        });
+                      }}
                       onClick={() =>
-                        void toggleLight(
-                          light.entity_id,
-                          isOn,
-                          lightConfigByEntity[light.entity_id]?.update_timeout_seconds,
-                        )
+                        {
+                          if (suppressClickRef.current.has(light.entity_id)) {
+                            suppressClickRef.current.delete(light.entity_id);
+                            return;
+                          }
+                          void toggleLight(
+                            light.entity_id,
+                            isOn,
+                            lightConfigByEntity[light.entity_id]?.update_timeout_seconds,
+                          );
+                        }
                       }
-                      className={`hp-light-row group flex h-14 w-full items-center gap-1.5 rounded-xl border px-3 text-left transition disabled:cursor-not-allowed disabled:opacity-55 ${
+                      className={`hp-light-row group relative flex h-14 w-full items-center gap-1.5 rounded-xl border px-3 text-left transition disabled:cursor-not-allowed disabled:opacity-55 ${
                         isOn
-                          ? "border-amber-300/75 bg-amber-100/85 text-slate-900 ring-1 ring-amber-300/55 shadow-[0_0_20px_rgba(251,191,36,0.22)] dark:border-amber-400/45 dark:bg-amber-300/12 dark:text-slate-900 dark:ring-amber-500/30"
+                          ? "border-amber-300/75 bg-amber-100/85 text-slate-900 ring-1 ring-amber-300/55 shadow-[0_0_20px_rgba(251,191,36,0.22)] dark:border-amber-500/55 dark:bg-amber-900/45 dark:text-amber-100 dark:ring-amber-500/25"
                           : "border-slate-300/80 bg-slate-200/75 text-slate-700 hover:border-amber-300 hover:bg-amber-50/60 dark:border-white/10 dark:bg-[#0a0a0a]/95 dark:text-slate-300 dark:hover:border-amber-900 dark:hover:bg-[#0d0d0d]"
                       }`}
                       title={light.entity_id}
@@ -641,17 +776,56 @@ export function LightingDashboard({
                         icon={light.icon}
                         className={`hp-light-icon h-5 w-5 shrink-0 transition sm:h-6 sm:w-6 ${
                           isOn
-                            ? "text-slate-900 dark:text-slate-900"
+                            ? "text-slate-900 dark:text-amber-100"
                             : "text-slate-400/70 dark:text-slate-600/80"
                         }`}
                       />
                       <span className="block min-w-0 flex-1 text-sm font-medium leading-tight sm:text-[0.93rem]">
                         <ScrollingLightName name={lightLabel(light, state)} />
                       </span>
+                      {isDimmable ? (
+                        <span className="inline-flex h-3 w-3 shrink-0 items-center justify-center" title="Dimmable">
+                          <svg
+                            viewBox="0 0 16 16"
+                            className="h-3 w-3 text-cyan-600 dark:text-cyan-300 dark:drop-shadow-[0_0_6px_rgba(103,232,249,0.7)]"
+                            aria-hidden="true"
+                          >
+                            <circle
+                              cx="8"
+                              cy="8"
+                              r="5.5"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              pathLength="100"
+                              strokeDasharray="60 40"
+                              transform="rotate(95 8 8)"
+                            />
+                          </svg>
+                        </span>
+                      ) : null}
                       {isPending ? (
                         <span className="inline-flex shrink-0 items-center">
                           <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-500/45 border-t-slate-900 dark:border-slate-400/30 dark:border-t-slate-100" />
                         </span>
+                      ) : null}
+                      {dragState?.entityId === light.entity_id && dragState.isDragging ? (
+                        <div
+                          className={`absolute top-1/2 z-20 h-28 w-10 -translate-y-1/2 rounded-xl border border-slate-300/80 bg-white p-1 shadow-lg dark:border-white/15 dark:bg-[#090909] ${
+                            dragState.meterSide === "right" ? "left-[calc(100%+0.35rem)]" : "right-[calc(100%+0.35rem)]"
+                          }`}
+                        >
+                          <div className="relative h-full w-full rounded-md bg-slate-200/80 dark:bg-slate-700/70">
+                            <div
+                              className="absolute bottom-0 left-0 right-0 rounded-md bg-amber-400/90"
+                              style={{ height: `${dragState.currentBrightnessPct}%` }}
+                            />
+                          </div>
+                          <div className="mt-1 text-center text-[9px] font-semibold text-slate-700 dark:text-slate-200">
+                            {dragState.currentBrightnessPct}%
+                          </div>
+                        </div>
                       ) : null}
                     </button>
                   );

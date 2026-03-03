@@ -15,6 +15,7 @@ class SetSwitchStateRequest(BaseModel):
 
 class SetLightStateRequest(BaseModel):
     is_on: bool
+    brightness_pct: float | None = Field(default=None, ge=0, le=100)
 
 
 class SetNumberValueRequest(BaseModel):
