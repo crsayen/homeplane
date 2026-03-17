@@ -13,6 +13,8 @@ services:
       LIGHTING_CONFIG_SEED_PATH: /app/data/lighting.config.json
     volumes:
       - homeplane_config:/data
+    devices:
+      - /dev/gpiomem:/dev/gpiomem
     restart: unless-stopped
     networks:
       - homeplane
