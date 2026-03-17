@@ -9,13 +9,16 @@ from app.core.security import require_api_key
 from app.core.security import validate_api_key_value
 from app.schemas.actions import (
     EntityStateResponse,
+    GpioPinStateResponse,
     HomeAssistantServiceResult,
     RunSceneRequest,
+    SetGpioPinStateRequest,
     SetLightStateRequest,
     SetNumberValueRequest,
     SetSwitchStateRequest,
     ToggleLightRequest,
 )
+from app.services.gpio_service import VALID_BCM_PINS, GPIOService
 from app.schemas.configuration import MultiRoomAudioConfig
 from app.schemas.lighting import LightingConfig
 from app.services.orchestrator import HomeOrchestrator
@@ -23,6 +26,15 @@ from app.services.orchestrator import HomeOrchestrator
 router = APIRouter(prefix="/api", tags=["orchestration"])
 ENTITY_ID_PATTERN = re.compile(r"^[a-z0-9_]+\.[a-zA-Z0-9_]+$")
 logger = getLogger(__name__)
+
+
+def validate_gpio_pin(pin: int) -> int:
+    if pin not in VALID_BCM_PINS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Invalid BCM GPIO pin: {pin}. Must be in range 2–27.",
+        )
+    return pin
 
 
 def validate_entity_id(entity_id: str) -> str:
@@ -169,6 +181,41 @@ async def set_number_value(
     validate_entity_domain(entity_id, "number")
     await request.app.state.rate_limiter.check(request)
     return await orchestrator.set_number_value(entity_id=entity_id, value=payload.value)
+
+
+@router.post(
+    "/gpio/{pin}/state",
+    response_model=GpioPinStateResponse,
+    dependencies=[Depends(require_api_key)],
+)
+async def set_gpio_pin_state(
+    pin: int,
+    payload: SetGpioPinStateRequest,
+    request: Request,
+) -> GpioPinStateResponse:
+    validate_gpio_pin(pin)
+    await request.app.state.rate_limiter.check(request)
+    gpio: GPIOService = request.app.state.gpio_service
+    if payload.duration_ms is not None:
+        await gpio.set_pin_timed(pin, payload.state, payload.duration_ms)
+    else:
+        gpio.set_pin(pin, payload.state)
+    return GpioPinStateResponse(pin=pin, state=payload.state)
+
+
+@router.get(
+    "/gpio/{pin}/state",
+    response_model=GpioPinStateResponse,
+    dependencies=[Depends(require_api_key)],
+)
+async def get_gpio_pin_state(
+    pin: int,
+    request: Request,
+) -> GpioPinStateResponse:
+    validate_gpio_pin(pin)
+    await request.app.state.rate_limiter.check(request)
+    gpio: GPIOService = request.app.state.gpio_service
+    return GpioPinStateResponse(pin=pin, state=gpio.read_pin(pin))
 
 
 @router.websocket("/ws/entities")

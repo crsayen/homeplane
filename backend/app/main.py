@@ -9,6 +9,7 @@ from app.core.rate_limit import InMemoryRateLimiter
 from app.schemas.configuration import MultiRoomAudioConfig
 from app.schemas.lighting import LightingConfig
 from app.services.config_store import JsonConfigStore, SQLiteConfigStore
+from app.services.gpio_service import GPIOService
 from app.services.ha_client import HomeAssistantClient
 
 
@@ -16,6 +17,7 @@ from app.services.ha_client import HomeAssistantClient
 async def lifespan(app: FastAPI):
     settings = get_settings()
 
+    app.state.gpio_service = GPIOService()
     app.state.ha_client = HomeAssistantClient(
         base_url=settings.ha_base_url,
         token=settings.ha_token,
@@ -51,6 +53,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    app.state.gpio_service.cleanup()
     await app.state.ha_client.close()
 
 

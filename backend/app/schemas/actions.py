@@ -32,3 +32,13 @@ class EntityStateResponse(BaseModel):
     attributes: dict[str, object] = Field(default_factory=dict)
     last_changed: str | None = None
     last_updated: str | None = None
+
+
+class SetGpioPinStateRequest(BaseModel):
+    state: bool
+    duration_ms: float | None = Field(default=None, gt=0, le=3_600_000)
+
+
+class GpioPinStateResponse(BaseModel):
+    pin: int
+    state: bool
