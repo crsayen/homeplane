@@ -14,7 +14,7 @@ services:
     volumes:
       - homeplane_config:/data
     devices:
-      - /dev/gpiomem:/dev/gpiomem
+      - /dev/gpiochip4:/dev/gpiochip4
     restart: unless-stopped
     networks:
       - homeplane
