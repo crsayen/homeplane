@@ -194,6 +194,61 @@ All endpoints require `x-homeplane-key` header.
 - `GET /api/lighting-config`
 - `PUT /api/lighting-config`
 - `WS /api/ws/entities?api_key=...&entity_ids=switch.a,number.b`
+- `POST /api/gpio/{pin}/state` — set GPIO pin state (BCM pin 2–27)
+- `GET /api/gpio/{pin}/state` — read GPIO pin state
+
+### GPIO endpoint details
+
+`POST /api/gpio/{pin}/state` body:
+
+```json
+{ "state": true }
+```
+
+Set pin indefinitely. Or with a timed auto-revert:
+
+```json
+{ "state": true, "duration_ms": 500 }
+```
+
+Pin reverts to the opposite state after `duration_ms` milliseconds. If a new timed request arrives before the timer fires, the previous timer is cancelled.
+
+### Home Assistant `rest_command` example
+
+```yaml
+rest_command:
+  pulse_gpio_17:
+    url: "https://homeplane.lan/api/gpio/17/state"
+    method: POST
+    headers:
+      x-homeplane-key: "your-key"
+    payload: '{"state": true, "duration_ms": 500}'
+    content_type: "application/json"
+    verify_ssl: false  # needed for Caddy LAN self-signed cert
+```
+
+## Raspberry Pi GPIO setup
+
+GPIO control uses `rpi-lgpio` (Pi 5 / kernel 6.x compatible). Two extra things are required in `docker-compose.yml` for the backend service, both already present:
+
+**Device access** — exposes the GPIO character device to the container:
+```yaml
+devices:
+  - /dev/gpiochip0:/dev/gpiochip0
+```
+
+**Board revision** — `rpi-lgpio` reads `/proc/device-tree/system/linux,revision` to detect Pi hardware, which isn't available inside Docker. Pass it as an env var instead:
+```yaml
+environment:
+  RPI_LGPIO_REVISION: "00d04171"
+```
+
+To find your Pi's revision:
+```bash
+cat /proc/device-tree/system/linux,revision | od -An -tx1 | tr -d " \n"; echo
+```
+
+If GPIO hardware isn't available (non-Pi or missing device), the service falls back to an in-memory simulation and logs a warning. The app continues to run normally.
 
 ## Notes
 

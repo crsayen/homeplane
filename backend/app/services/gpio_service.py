@@ -9,7 +9,7 @@ try:
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
     _GPIO_AVAILABLE = True
-except (ImportError, RuntimeError):
+except Exception:
     GPIO = None
     _GPIO_AVAILABLE = False
     logger.warning("RPi.GPIO not available; GPIO operations will be simulated")

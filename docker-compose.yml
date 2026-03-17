@@ -5,6 +5,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      RPI_LGPIO_REVISION: "00d04171"
       CONFIG_STORE_BACKEND: ${CONFIG_STORE_BACKEND:-file}
       SQLITE_CONFIG_DB_PATH: /data/homeplane-config.sqlite3
       AUDIO_CONFIG_PATH: /data/multi-room-audio.config.json
@@ -14,7 +15,7 @@ services:
     volumes:
       - homeplane_config:/data
     devices:
-      - /dev/gpiochip4:/dev/gpiochip4
+      - /dev/gpiochip0:/dev/gpiochip0
     restart: unless-stopped
     networks:
       - homeplane
