@@ -232,28 +232,27 @@ function MusicPanel({
         )}
 
         {/* Volume */}
-        {(isPlaying || someOn) && (
-          <div className="flex items-center gap-2">
-            <span className="text-[0.9vw] text-white/20">🔈</span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={1}
-              value={displayVolume}
-              onChange={(e) => setLocalVolume(Number(e.target.value))}
-              onPointerUp={(e) => {
-                const vol = Number((e.target as HTMLInputElement).value);
-                setLocalVolume(null);
-                onVolumeCommit(vol);
-              }}
-              className="volume-slider flex-1"
-            />
-            <span className="text-[0.8vw] text-white/25 tabular-nums w-8 text-right">
+        <div className={`flex items-center gap-2 ${!(isPlaying || someOn) ? "opacity-25 pointer-events-none" : ""}`}>
+          <span className="text-[0.9vw] text-white/20">🔈</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={displayVolume}
+            onChange={(e) => setLocalVolume(Number(e.target.value))}
+            onPointerUp={(e) => {
+              const vol = Number((e.target as HTMLInputElement).value);
+              setLocalVolume(null);
+              onVolumeCommit(vol);
+            }}
+            disabled={!(isPlaying || someOn)}
+            className="volume-slider flex-1"
+          />
+          <span className="text-[0.8vw] text-white/25 tabular-nums w-8 text-right">
               {Math.round(displayVolume)}
             </span>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
