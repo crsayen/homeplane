@@ -1,3 +1,7 @@
 streams:
   doorbell:
     - rtsps://192.168.0.1:7441/GYYXLzvzWIb97ll1?enableSrtp
+
+webrtc:
+  candidates:
+    - 192.168.0.124:8555

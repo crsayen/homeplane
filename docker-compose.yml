@@ -38,13 +38,10 @@ services:
 
   go2rtc:
     image: alexxit/go2rtc
+    network_mode: host
     volumes:
       - ./go2rtc.yaml:/config/go2rtc.yaml:ro
-    expose:
-      - "1984"
     restart: unless-stopped
-    networks:
-      - homeplane
 
   caddy:
     image: caddy:2.8-alpine
