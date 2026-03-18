@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { EntityStateResponse, HomeplaneClient, KioskConfig, MediaPlayerCommand, WeatherForecastItem } from "../api/homeplaneClient";
+import { EntityStateResponse, HomeplaneClient, KioskConfig, WeatherForecastItem } from "../api/homeplaneClient";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -113,18 +113,25 @@ function WeatherPanel({ state, forecast }: { state: EntityStateResponse | null; 
 }
 
 function MusicPanel({
-  state,
-  onCommand,
+  mediaState,
+  speakersState,
+  volumeState,
+  onPlayMusic,
+  onStopMusic,
+  onToggleSpeakers,
   onVolumeCommit,
 }: {
-  state: EntityStateResponse | null;
-  onCommand: (cmd: MediaPlayerCommand) => void;
+  mediaState: EntityStateResponse | null;
+  speakersState: EntityStateResponse | null;
+  volumeState: EntityStateResponse | null;
+  onPlayMusic: () => void;
+  onStopMusic: () => void;
+  onToggleSpeakers: () => void;
   onVolumeCommit: (vol: number) => void;
 }) {
   const [localVolume, setLocalVolume] = useState<number | null>(null);
 
-  // Reset local volume when entity state updates
-  const stateVolume = state?.attributes.volume_level as number | undefined;
+  const stateVolume = volumeState ? Number(volumeState.state) : 0;
   const prevVolumeRef = useRef(stateVolume);
   useEffect(() => {
     if (stateVolume !== prevVolumeRef.current) {
@@ -133,11 +140,11 @@ function MusicPanel({
     }
   }, [stateVolume]);
 
-  const displayVolume = localVolume ?? stateVolume ?? 0;
-  const isPlaying = state?.state === "playing";
-  const isActive = state?.state === "playing" || state?.state === "paused";
-  const title = state?.attributes.media_title as string | undefined;
-  const artist = state?.attributes.media_artist as string | undefined;
+  const displayVolume = localVolume ?? stateVolume;
+  const isPlaying = mediaState?.state === "playing";
+  const speakersOn = speakersState?.state === "on";
+  const title = mediaState?.attributes.media_title as string | undefined;
+  const artist = mediaState?.attributes.media_artist as string | undefined;
 
   return (
     <div className="h-full flex flex-col gap-3 overflow-hidden">
@@ -145,9 +152,7 @@ function MusicPanel({
 
       {/* Track info */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        {!state ? (
-          <div className="text-[1vw] text-white/20">No player configured</div>
-        ) : isActive && (title ?? artist) ? (
+        {isPlaying && (title ?? artist) ? (
           <>
             {title && (
               <div className="text-[1.5vw] font-semibold text-white leading-tight line-clamp-2">{title}</div>
@@ -157,60 +162,62 @@ function MusicPanel({
             )}
           </>
         ) : (
-          <div className="text-[1vw] text-white/20 capitalize">{state.state}</div>
+          <div className="text-[1vw] text-white/20">{isPlaying ? "Playing" : "Idle"}</div>
         )}
       </div>
 
       {/* Controls */}
-      {state && (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-center gap-5">
-            <button
-              type="button"
-              onClick={() => onCommand("previous_track")}
-              className="text-white/50 hover:text-white transition text-[1.8vw]"
-            >
-              ⏮
-            </button>
-            <button
-              type="button"
-              onClick={() => onCommand("play_pause")}
-              className="text-white text-[2.2vw] transition hover:scale-110"
-            >
-              {isPlaying ? "⏸" : "▶"}
-            </button>
-            <button
-              type="button"
-              onClick={() => onCommand("next_track")}
-              className="text-white/50 hover:text-white transition text-[1.8vw]"
-            >
-              ⏭
-            </button>
-          </div>
+      <div className="flex flex-col gap-3">
+        {/* Play / Stop */}
+        <button
+          type="button"
+          onClick={isPlaying ? onStopMusic : onPlayMusic}
+          className={`flex items-center justify-center gap-2 py-2 px-4 rounded-lg transition text-[1.1vw] font-semibold ${
+            isPlaying
+              ? "bg-white/10 text-white/70 hover:bg-white/15"
+              : "bg-white/10 text-white hover:bg-white/20"
+          }`}
+        >
+          <span className="text-[1.4vw]">{isPlaying ? "⏹" : "▶"}</span>
+          {isPlaying ? "Stop Music" : "Play Music"}
+        </button>
 
-          {/* Volume */}
-          <div className="flex items-center gap-2">
-            <span className="text-[0.9vw] text-white/20">🔈</span>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              value={displayVolume}
-              onChange={(e) => setLocalVolume(Number(e.target.value))}
-              onPointerUp={(e) => {
-                const vol = Number((e.target as HTMLInputElement).value);
-                setLocalVolume(null);
-                onVolumeCommit(vol);
-              }}
-              className="volume-slider flex-1"
-            />
-            <span className="text-[0.8vw] text-white/25 tabular-nums w-8 text-right">
-              {Math.round(displayVolume * 100)}
-            </span>
-          </div>
+        {/* Volume */}
+        <div className="flex items-center gap-2">
+          <span className="text-[0.9vw] text-white/20">🔈</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={displayVolume}
+            onChange={(e) => setLocalVolume(Number(e.target.value))}
+            onPointerUp={(e) => {
+              const vol = Number((e.target as HTMLInputElement).value);
+              setLocalVolume(null);
+              onVolumeCommit(vol);
+            }}
+            className="volume-slider flex-1"
+          />
+          <span className="text-[0.8vw] text-white/25 tabular-nums w-8 text-right">
+            {Math.round(displayVolume)}
+          </span>
         </div>
-      )}
+
+        {/* Indoor speakers toggle */}
+        <button
+          type="button"
+          onClick={onToggleSpeakers}
+          className={`flex items-center justify-center gap-2 py-1.5 rounded-lg transition text-[0.9vw] font-medium ${
+            speakersOn
+              ? "bg-white/15 text-white/80"
+              : "bg-white/5 text-white/30 hover:bg-white/10"
+          }`}
+        >
+          <span className={`w-2 h-2 rounded-full ${speakersOn ? "bg-green-400" : "bg-white/20"}`} />
+          Indoor Speakers {speakersOn ? "On" : "Off"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -419,6 +426,8 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
   const [weatherState, setWeatherState] = useState<EntityStateResponse | null>(null);
   const [weatherForecast, setWeatherForecast] = useState<WeatherForecastItem[]>([]);
   const [mediaState, setMediaState] = useState<EntityStateResponse | null>(null);
+  const [indoorSpeakersState, setIndoorSpeakersState] = useState<EntityStateResponse | null>(null);
+  const [indoorVolumeState, setIndoorVolumeState] = useState<EntityStateResponse | null>(null);
   const [doorbellActive, setDoorbellActive] = useState(false);
   const [doorbellAutoCloseAt, setDoorbellAutoCloseAt] = useState(new Date());
   const [camTimestamp, setCamTimestamp] = useState(Date.now());
@@ -503,10 +512,23 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
     return () => { cancelled = true; clearInterval(id); };
   }, [client, config?.media_player_entity]);
 
-  // WebSocket: real-time media player + doorbell sensor updates
+  // Fetch indoor speaker + volume state on mount
+  useEffect(() => {
+    client.getEntityState("input_boolean.indoor_speakers")
+      .then(setIndoorSpeakersState).catch(() => {});
+    client.getEntityState("input_number.indoor_volume")
+      .then(setIndoorVolumeState).catch(() => {});
+  }, [client]);
+
+  // WebSocket: real-time media player + doorbell sensor + indoor speaker/volume updates
   useEffect(() => {
     if (!config) return;
-    const ids = [config.media_player_entity, config.doorbell_sensor_entity].filter(Boolean);
+    const ids = [
+      config.media_player_entity,
+      config.doorbell_sensor_entity,
+      "input_boolean.indoor_speakers",
+      "input_number.indoor_volume",
+    ].filter(Boolean);
     if (ids.length === 0) return;
 
     let stopped = false;
@@ -527,6 +549,12 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
 
           if (state.entity_id === config.media_player_entity) {
             setMediaState(state);
+          }
+          if (state.entity_id === "input_boolean.indoor_speakers") {
+            setIndoorSpeakersState(state);
+          }
+          if (state.entity_id === "input_number.indoor_volume") {
+            setIndoorVolumeState(state);
           }
           if (state.entity_id === config.doorbell_sensor_entity) {
             if (state.state === "on") {
@@ -555,17 +583,20 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
     };
   }, [apiBaseUrl, apiKey, config]);
 
-  const handleCommand = (cmd: MediaPlayerCommand) => {
-    if (!config?.media_player_entity) return;
-    client.mediaPlayerCommand(config.media_player_entity, cmd)
-      .then(() => client.getEntityState(config.media_player_entity!))
-      .then(setMediaState)
-      .catch(() => {/* ignore */});
+  const handlePlayMusic = () => {
+    client.runScript("script.play_music").catch(() => {});
+  };
+
+  const handleStopMusic = () => {
+    client.runScript("script.turn_off_music_everywhere").catch(() => {});
+  };
+
+  const handleToggleSpeakers = () => {
+    client.toggleInputBoolean("input_boolean.indoor_speakers").catch(() => {});
   };
 
   const handleVolumeCommit = (vol: number) => {
-    if (!config?.media_player_entity) return;
-    client.setMediaPlayerVolume(config.media_player_entity, vol).catch(() => {/* ignore */});
+    client.setInputNumberValue("input_number.indoor_volume", vol).catch(() => {});
   };
 
   const handleSaveConfig = () => {
@@ -624,8 +655,12 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
         </div>
         <div className="p-5 overflow-hidden min-w-0">
           <MusicPanel
-            state={mediaState}
-            onCommand={handleCommand}
+            mediaState={mediaState}
+            speakersState={indoorSpeakersState}
+            volumeState={indoorVolumeState}
+            onPlayMusic={handlePlayMusic}
+            onStopMusic={handleStopMusic}
+            onToggleSpeakers={handleToggleSpeakers}
             onVolumeCommit={handleVolumeCommit}
           />
         </div>

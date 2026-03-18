@@ -224,6 +224,52 @@ async def get_gpio_pin_state(
     return GpioPinStateResponse(pin=pin, state=gpio.read_pin(pin))
 
 
+@router.post(
+    "/scripts/{entity_id}/run",
+    response_model=list[HomeAssistantServiceResult],
+    dependencies=[Depends(require_api_key)],
+)
+async def run_script(
+    entity_id: str,
+    request: Request,
+    orchestrator: HomeOrchestrator = Depends(get_orchestrator),
+) -> list[HomeAssistantServiceResult]:
+    validate_entity_domain(entity_id, "script")
+    await request.app.state.rate_limiter.check(request)
+    return await orchestrator.run_script(entity_id=entity_id)
+
+
+@router.post(
+    "/input-booleans/{entity_id}/toggle",
+    response_model=list[HomeAssistantServiceResult],
+    dependencies=[Depends(require_api_key)],
+)
+async def toggle_input_boolean(
+    entity_id: str,
+    request: Request,
+    orchestrator: HomeOrchestrator = Depends(get_orchestrator),
+) -> list[HomeAssistantServiceResult]:
+    validate_entity_domain(entity_id, "input_boolean")
+    await request.app.state.rate_limiter.check(request)
+    return await orchestrator.toggle_input_boolean(entity_id=entity_id)
+
+
+@router.post(
+    "/input-numbers/{entity_id}/value",
+    response_model=list[HomeAssistantServiceResult],
+    dependencies=[Depends(require_api_key)],
+)
+async def set_input_number_value(
+    entity_id: str,
+    payload: SetNumberValueRequest,
+    request: Request,
+    orchestrator: HomeOrchestrator = Depends(get_orchestrator),
+) -> list[HomeAssistantServiceResult]:
+    validate_entity_domain(entity_id, "input_number")
+    await request.app.state.rate_limiter.check(request)
+    return await orchestrator.set_input_number_value(entity_id=entity_id, value=payload.value)
+
+
 @router.get(
     "/weather/{entity_id}/forecast",
     dependencies=[Depends(require_api_key)],

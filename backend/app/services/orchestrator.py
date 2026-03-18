@@ -82,6 +82,18 @@ class HomeOrchestrator:
         )
         return [HomeAssistantServiceResult.model_validate(item) for item in result]
 
+    async def run_script(self, entity_id: str) -> list[HomeAssistantServiceResult]:
+        result = await self._ha_client.call_service("script", "turn_on", {"entity_id": entity_id})
+        return [HomeAssistantServiceResult.model_validate(item) for item in result]
+
+    async def toggle_input_boolean(self, entity_id: str) -> list[HomeAssistantServiceResult]:
+        result = await self._ha_client.call_service("input_boolean", "toggle", {"entity_id": entity_id})
+        return [HomeAssistantServiceResult.model_validate(item) for item in result]
+
+    async def set_input_number_value(self, entity_id: str, value: float) -> list[HomeAssistantServiceResult]:
+        result = await self._ha_client.call_service("input_number", "set_value", {"entity_id": entity_id, "value": value})
+        return [HomeAssistantServiceResult.model_validate(item) for item in result]
+
     async def get_weather_forecast(self, entity_id: str, forecast_type: str = "daily") -> list[dict]:
         result = await self._ha_client.call_service_with_response(
             "weather",

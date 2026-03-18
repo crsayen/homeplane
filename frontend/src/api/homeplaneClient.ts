@@ -168,6 +168,27 @@ export class HomeplaneClient {
     });
   }
 
+  async runScript(entityId: string): Promise<unknown[]> {
+    return this.request<unknown[]>(`/api/scripts/${encodeURIComponent(entityId)}/run`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  }
+
+  async toggleInputBoolean(entityId: string): Promise<unknown[]> {
+    return this.request<unknown[]>(`/api/input-booleans/${encodeURIComponent(entityId)}/toggle`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  }
+
+  async setInputNumberValue(entityId: string, value: number): Promise<unknown[]> {
+    return this.request<unknown[]>(`/api/input-numbers/${encodeURIComponent(entityId)}/value`, {
+      method: "POST",
+      body: JSON.stringify({ value }),
+    });
+  }
+
   async getWeatherForecast(entityId: string): Promise<WeatherForecastItem[]> {
     return this.request<WeatherForecastItem[]>(`/api/weather/${encodeURIComponent(entityId)}/forecast`, {
       method: "GET",
