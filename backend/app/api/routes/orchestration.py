@@ -315,8 +315,37 @@ async def get_camera_hls(entity_id: str, request: Request) -> dict:
     validate_entity_domain(entity_id, "camera")
     await request.app.state.rate_limiter.check(request)
     ha_client: HomeAssistantClient = request.app.state.ha_client
-    url = await ha_client.get_camera_hls_stream(entity_id)
-    return {"url": url}
+    ha_path = await ha_client.get_camera_hls_stream(entity_id)
+    # Return a proxied URL through our backend
+    api_key = request.headers.get("x-homeplane-key", "")
+    proxy_url = f"/api/ha-proxy?path={ha_path}&api_key={api_key}"
+    return {"url": proxy_url}
+
+
+@router.get("/ha-proxy", dependencies=[Depends(require_api_key_or_query)])
+async def ha_proxy(path: str, request: Request) -> Response:
+    """Proxy HA HLS paths, rewriting relative URLs in manifests."""
+    if not path.startswith("/api/hls/"):
+        raise HTTPException(status_code=400, detail="Only /api/hls/ paths are allowed")
+    await request.app.state.rate_limiter.check(request)
+    ha_client: HomeAssistantClient = request.app.state.ha_client
+    content, content_type = await ha_client.proxy_ha_path(path)
+
+    # Rewrite relative URLs in HLS manifests to go through this proxy
+    if content_type and "mpegurl" in content_type:
+        api_key = request.query_params.get("api_key", "")
+        base_path = path.rsplit("/", 1)[0]
+        text = content.decode()
+        lines = []
+        for line in text.splitlines():
+            if line and not line.startswith("#"):
+                # Relative URL — make it absolute through our proxy
+                abs_path = base_path + "/" + line
+                line = f"/api/ha-proxy?path={abs_path}&api_key={api_key}"
+            lines.append(line)
+        content = "\n".join(lines).encode()
+
+    return Response(content=content, media_type=content_type)
 
 
 @router.get("/camera/{entity_id}/snapshot", dependencies=[Depends(require_api_key_or_query)])

@@ -62,7 +62,13 @@ class HomeAssistantClient:
             result = json.loads(await websocket.recv())
             if not result.get("success"):
                 raise HTTPException(status_code=502, detail="Failed to start camera stream")
-            return str(self._client.base_url).rstrip("/") + result["result"]["url"]
+            return result["result"]["url"]
+
+    async def proxy_ha_path(self, path: str) -> tuple[bytes, str]:
+        response = await self._client.get(path)
+        self._raise_on_error(response, f"Failed to proxy HA path: {path}")
+        content_type = response.headers.get("content-type", "application/octet-stream")
+        return response.content, content_type
 
     async def get_media_player_image(self, proxy_path: str) -> tuple[bytes, str]:
         response = await self._client.get(proxy_path)
