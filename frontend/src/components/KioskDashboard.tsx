@@ -181,8 +181,19 @@ function MusicPanel({
   }
 
   return (
-    <div className="h-full flex flex-col gap-3 overflow-hidden">
+    <div className="h-full flex flex-col gap-3 overflow-hidden relative">
       <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-semibold">Music</div>
+
+      {/* Shuffle / next — dead center of panel */}
+      {isPlaying && (
+        <button
+          type="button"
+          onClick={onSkip}
+          className="absolute inset-0 m-auto w-fit h-fit text-[4vw] active:scale-90 transition-transform z-10"
+        >
+          🎲
+        </button>
+      )}
 
       {/* Track info */}
       <div className="flex-1 min-h-0 overflow-hidden">
@@ -206,20 +217,6 @@ function MusicPanel({
           </div>
         ) : (
           <div className="text-[1vw] text-white/20">Idle</div>
-        )}
-
-        {/* Shuffle / next */}
-        {isPlaying && (
-          <div className="flex-1 flex items-center justify-center">
-            <button
-              type="button"
-              onClick={onSkip}
-              className="text-[3vw] text-white/20 hover:text-white/60 active:scale-90 transition"
-              title="Next song"
-            >
-              🎲
-            </button>
-          </div>
         )}
       </div>
 
