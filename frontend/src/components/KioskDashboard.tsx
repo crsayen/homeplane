@@ -153,6 +153,7 @@ function MusicPanel({
   const isPlaying = mediaState?.state === "playing";
   const title = mediaState?.attributes.media_title as string | undefined;
   const artist = mediaState?.attributes.media_artist as string | undefined;
+  const albumArt = mediaState?.attributes.entity_picture as string | undefined;
 
   const allOn = INDOOR_SWITCHES.every((id) => switchStates.get(id) === "on");
   const someOn = INDOOR_SWITCHES.some((id) => switchStates.get(id) === "on");
@@ -182,14 +183,23 @@ function MusicPanel({
       {/* Track info */}
       <div className="flex-1 min-h-0 overflow-hidden">
         {isPlaying && (title ?? artist) ? (
-          <>
-            {title && (
-              <div className="text-[1.5vw] font-semibold text-white leading-tight line-clamp-2">{title}</div>
+          <div className="flex gap-3 items-start">
+            {albumArt && (
+              <img
+                src={albumArt}
+                alt=""
+                className="w-[6vw] h-[6vw] rounded-lg object-cover shrink-0"
+              />
             )}
-            {artist && (
-              <div className="text-[1vw] text-white/40 mt-1 truncate">{artist}</div>
-            )}
-          </>
+            <div className="min-w-0">
+              {title && (
+                <div className="text-[1.5vw] font-semibold text-white leading-tight line-clamp-2">{title}</div>
+              )}
+              {artist && (
+                <div className="text-[1vw] text-white/40 mt-1 truncate">{artist}</div>
+              )}
+            </div>
+          </div>
         ) : (
           <div className="text-[1vw] text-white/20">Idle</div>
         )}
