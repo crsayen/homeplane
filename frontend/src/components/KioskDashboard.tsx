@@ -391,7 +391,6 @@ function DoorbellOverlay({
   onDismiss: () => void;
 }) {
   const [secondsLeft, setSecondsLeft] = useState(30);
-  const [useSnapshot, setUseSnapshot] = useState(false);
   const [snapshotTs, setSnapshotTs] = useState(Date.now());
 
   // Countdown + auto-dismiss
@@ -404,12 +403,11 @@ function DoorbellOverlay({
     return () => clearInterval(id);
   }, [autoCloseAt, onDismiss]);
 
-  // Fallback snapshot refresh (every 2s) when stream fails
+  // Snapshot refresh (every 1s)
   useEffect(() => {
-    if (!useSnapshot) return;
-    const id = setInterval(() => setSnapshotTs(Date.now()), 2000);
+    const id = setInterval(() => setSnapshotTs(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [useSnapshot]);
+  }, []);
 
   const camEntity = config.doorbell_camera_entity;
 
@@ -433,23 +431,16 @@ function DoorbellOverlay({
         </div>
       </div>
 
-      {/* Camera feed — MJPEG stream with snapshot fallback */}
+      {/* Camera feed (snapshots every 1s) */}
       <div className="flex-1 flex items-center justify-center overflow-hidden bg-black">
         {!camEntity ? (
           <div className="text-white/30 text-[2vw]">No doorbell camera configured</div>
-        ) : useSnapshot ? (
+        ) : (
           <img
             key={snapshotTs}
             src={`${client.getCameraSnapshotUrl(camEntity)}&t=${snapshotTs}`}
             alt="Doorbell"
             className="max-w-full max-h-full object-contain"
-          />
-        ) : (
-          <img
-            src={client.getCameraStreamUrl(camEntity)}
-            alt="Doorbell Live"
-            className="max-w-full max-h-full object-contain"
-            onError={() => setUseSnapshot(true)}
           />
         )}
       </div>
