@@ -138,6 +138,7 @@ function MusicPanel({
   onSkip,
   onPlayPause,
   onPrevious,
+  onOpenRooms,
   onVolumeCommit,
 }: {
   displayState: EntityStateResponse | null;
@@ -151,6 +152,7 @@ function MusicPanel({
   onSkip: () => void;
   onPlayPause: () => void;
   onPrevious: () => void;
+  onOpenRooms: () => void;
   onVolumeCommit: (vol: number) => void;
 }) {
   const [localVolume, setLocalVolume] = useState<number | null>(null);
@@ -274,6 +276,15 @@ function MusicPanel({
 
       {/* Controls */}
       <div className="flex flex-col gap-2">
+        {/* Rooms button */}
+        <button
+          type="button"
+          onClick={onOpenRooms}
+          className="flex items-center justify-center gap-1.5 py-1 rounded-lg transition text-[0.85vw] font-medium bg-white/5 text-white/40 active:bg-white/10"
+        >
+          🎛 Rooms
+        </button>
+
         {/* Volume */}
         <div className={`flex items-center gap-2 ${!(isPlaying || someOn) ? "opacity-25 pointer-events-none" : ""}`}>
           <span className="text-[0.9vw] text-white/20">🔈</span>
@@ -623,6 +634,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
   const [editorOpen, setEditorOpen] = useState(false);
   const [configDraft, setConfigDraft] = useState<KioskConfig>(EMPTY_CONFIG);
   const [configSaving, setConfigSaving] = useState(false);
+  const [roomsOpen, setRoomsOpen] = useState(false);
   const [configSaveError, setConfigSaveError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -890,6 +902,27 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
         />
       )}
 
+      {/* Rooms modal (multi-room audio page in iframe) */}
+      {roomsOpen && (
+        <div className="fixed inset-0 z-40 flex flex-col bg-black">
+          <div className="flex items-center justify-between px-6 py-3 border-b border-white/10 shrink-0">
+            <span className="text-[1.4vw] font-bold text-white uppercase tracking-[0.3em]">Room Controls</span>
+            <button
+              type="button"
+              onClick={() => setRoomsOpen(false)}
+              className="rounded-xl border border-white/20 px-5 py-2 text-[1vw] font-semibold text-white/70 active:bg-white/10 transition"
+            >
+              Close
+            </button>
+          </div>
+          <iframe
+            src="/audio"
+            className="flex-1 w-full border-none"
+            title="Room Controls"
+          />
+        </div>
+      )}
+
       {/* Config editor */}
       {editorOpen && (
         <ConfigEditor
@@ -930,6 +963,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
             onSkip={handleSkip}
             onPlayPause={handlePlayPause}
             onPrevious={handlePrevious}
+            onOpenRooms={() => setRoomsOpen(true)}
             onVolumeCommit={handleVolumeCommit}
           />
         </div>
