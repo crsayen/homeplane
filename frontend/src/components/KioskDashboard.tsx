@@ -112,8 +112,11 @@ function WeatherPanel({ state, forecast }: { state: EntityStateResponse | null; 
   );
 }
 
-// WiiM native entity — reports track info regardless of source (Spotify Connect, AirPlay, MA, etc.)
-const WIIM_DISPLAY_ENTITY = "media_player.wiim_pro_24f8_5";
+// Two media player entities for the same WiiM Pro hardware:
+// - Native (WiiM integration): has track info for Spotify Connect, AirPlay, etc.
+// - MA (Music Assistant): has track info when MA is the source
+const WIIM_NATIVE_ENTITY = "media_player.wiim_pro_24f8_5";
+const WIIM_MA_ENTITY = "media_player.wiim_pro_24f8_4";
 
 const INDOOR_SWITCHES = [
   "switch.living_room_power",
@@ -532,7 +535,8 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
   const [config, setConfig] = useState<KioskConfig | null>(null);
   const [weatherState, setWeatherState] = useState<EntityStateResponse | null>(null);
   const [weatherForecast, setWeatherForecast] = useState<WeatherForecastItem[]>([]);
-  const [mediaDisplayState, setMediaDisplayState] = useState<EntityStateResponse | null>(null);
+  const [wiimNativeState, setWiimNativeState] = useState<EntityStateResponse | null>(null);
+  const [wiimMaState, setWiimMaState] = useState<EntityStateResponse | null>(null);
   const [indoorSwitchStates, setIndoorSwitchStates] = useState<Map<string, string>>(new Map());
   const indoorSwitchStatesRef = useRef(indoorSwitchStates);
   indoorSwitchStatesRef.current = indoorSwitchStates;
@@ -608,16 +612,19 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
     return () => { cancelled = true; clearInterval(id); };
   }, [client, config?.weather_entity]);
 
-  // Fetch WiiM display state (every 30s, also refreshed via WS)
+  // Fetch both WiiM entity states (every 30s, also refreshed via WS)
   useEffect(() => {
     let cancelled = false;
-    const fetch = () => {
-      client.getEntityState(WIIM_DISPLAY_ENTITY)
-        .then((s) => { if (!cancelled) setMediaDisplayState(s); })
+    const fetchBoth = () => {
+      client.getEntityState(WIIM_NATIVE_ENTITY)
+        .then((s) => { if (!cancelled) setWiimNativeState(s); })
+        .catch(() => {});
+      client.getEntityState(WIIM_MA_ENTITY)
+        .then((s) => { if (!cancelled) setWiimMaState(s); })
         .catch(() => {});
     };
-    fetch();
-    const id = setInterval(fetch, 30_000);
+    fetchBoth();
+    const id = setInterval(fetchBoth, 30_000);
     return () => { cancelled = true; clearInterval(id); };
   }, [client]);
 
@@ -639,7 +646,8 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
   useEffect(() => {
     if (!config) return;
     const ids = [
-      WIIM_DISPLAY_ENTITY,
+      WIIM_NATIVE_ENTITY,
+      WIIM_MA_ENTITY,
       config.doorbell_sensor_entity,
       "input_number.indoor_volume",
       ...INDOOR_SWITCHES,
@@ -662,8 +670,11 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
           if (payload.type !== "state_changed") return;
           const { state } = payload;
 
-          if (state.entity_id === WIIM_DISPLAY_ENTITY) {
-            setMediaDisplayState(state);
+          if (state.entity_id === WIIM_NATIVE_ENTITY) {
+            setWiimNativeState(state);
+          }
+          if (state.entity_id === WIIM_MA_ENTITY) {
+            setWiimMaState(state);
           }
           if ((INDOOR_SWITCHES as readonly string[]).includes(state.entity_id)) {
             setIndoorSwitchStates((prev) => new Map(prev).set(state.entity_id, state.state));
@@ -728,6 +739,11 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
     }, 3000);
   };
 
+  // Pick the entity that has real track info — MA when it's the source, native otherwise
+  const maHasTrack = wiimMaState?.state === "playing" && !!(wiimMaState.attributes.media_title as string | undefined);
+  const activeMediaState = maHasTrack ? wiimMaState : wiimNativeState;
+  const activeMediaEntity = maHasTrack ? WIIM_MA_ENTITY : WIIM_NATIVE_ENTITY;
+
   const handlePlayMusic = () => {
     setMusicPending(true);
     client.runScript("script.play_music").catch(() => {});
@@ -744,15 +760,15 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
   };
 
   const handleSkip = () => {
-    client.mediaPlayerCommand(WIIM_DISPLAY_ENTITY, "next_track").catch(() => {});
+    client.mediaPlayerCommand(activeMediaEntity, "next_track").catch(() => {});
   };
 
   const handlePlayPause = () => {
-    client.mediaPlayerCommand(WIIM_DISPLAY_ENTITY, "play_pause").catch(() => {});
+    client.mediaPlayerCommand(activeMediaEntity, "play_pause").catch(() => {});
   };
 
   const handlePrevious = () => {
-    client.mediaPlayerCommand(WIIM_DISPLAY_ENTITY, "previous_track").catch(() => {});
+    client.mediaPlayerCommand(activeMediaEntity, "previous_track").catch(() => {});
   };
 
   const handlePlayEverywhere = () => {
@@ -821,7 +837,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
         </div>
         <div className="p-5 overflow-hidden min-w-0">
           <MusicPanel
-            displayState={mediaDisplayState}
+            displayState={activeMediaState}
             switchStates={indoorSwitchStates}
             volumeState={indoorVolumeState}
             pending={musicPending}
