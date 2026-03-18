@@ -7,6 +7,7 @@ from app.api.routes.orchestration import router as orchestration_router
 from app.core.config import get_settings
 from app.core.rate_limit import InMemoryRateLimiter
 from app.schemas.configuration import MultiRoomAudioConfig
+from app.schemas.kiosk import KioskConfig
 from app.schemas.lighting import LightingConfig
 from app.services.config_store import JsonConfigStore, SQLiteConfigStore
 from app.services.gpio_service import GPIOService
@@ -39,6 +40,12 @@ async def lifespan(app: FastAPI):
             model_cls=LightingConfig,
             seed_path=settings.lighting_config_seed_path,
         )
+        app.state.kiosk_config_store = SQLiteConfigStore(
+            db_path=settings.sqlite_config_db_path,
+            key="kiosk-config",
+            model_cls=KioskConfig,
+            seed_path=settings.kiosk_config_seed_path,
+        )
     else:
         app.state.audio_config_store = JsonConfigStore(
             settings.audio_config_path,
@@ -49,6 +56,11 @@ async def lifespan(app: FastAPI):
             settings.lighting_config_path,
             model_cls=LightingConfig,
             seed_path=settings.lighting_config_seed_path,
+        )
+        app.state.kiosk_config_store = JsonConfigStore(
+            settings.kiosk_config_path,
+            model_cls=KioskConfig,
+            seed_path=settings.kiosk_config_seed_path,
         )
 
     yield

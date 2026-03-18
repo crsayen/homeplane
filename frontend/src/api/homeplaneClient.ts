@@ -54,6 +54,16 @@ export interface LightingConfig {
   rooms: RoomLightingConfig[];
 }
 
+export interface KioskConfig {
+  weather_entity: string;
+  media_player_entity: string;
+  package_camera_entity: string;
+  doorbell_camera_entity: string;
+  doorbell_sensor_entity: string;
+}
+
+export type MediaPlayerCommand = "play_pause" | "next_track" | "previous_track";
+
 export class HomeplaneClient {
   private readonly baseUrl: string;
   private readonly apiKey: string;
@@ -124,6 +134,39 @@ export class HomeplaneClient {
       method: "PUT",
       body: JSON.stringify(payload),
     });
+  }
+
+  async getKioskConfig(): Promise<KioskConfig> {
+    return this.request<KioskConfig>("/api/kiosk-config", { method: "GET" });
+  }
+
+  async updateKioskConfig(payload: KioskConfig): Promise<KioskConfig> {
+    return this.request<KioskConfig>("/api/kiosk-config", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async mediaPlayerCommand(entityId: string, command: MediaPlayerCommand): Promise<unknown[]> {
+    return this.request<unknown[]>(`/api/media-player/${entityId}/command`, {
+      method: "POST",
+      body: JSON.stringify({ command }),
+    });
+  }
+
+  async setMediaPlayerVolume(entityId: string, volume: number): Promise<unknown[]> {
+    return this.request<unknown[]>(`/api/media-player/${entityId}/volume`, {
+      method: "POST",
+      body: JSON.stringify({ volume }),
+    });
+  }
+
+  getCameraSnapshotUrl(entityId: string): string {
+    return `${this.baseUrl}/api/camera/${encodeURIComponent(entityId)}/snapshot?api_key=${encodeURIComponent(this.apiKey)}`;
+  }
+
+  getCameraStreamUrl(entityId: string): string {
+    return `${this.baseUrl}/api/camera/${encodeURIComponent(entityId)}/stream?api_key=${encodeURIComponent(this.apiKey)}`;
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {

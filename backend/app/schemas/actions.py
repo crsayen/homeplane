@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -42,3 +44,11 @@ class SetGpioPinStateRequest(BaseModel):
 class GpioPinStateResponse(BaseModel):
     pin: int
     state: bool
+
+
+class MediaPlayerCommandRequest(BaseModel):
+    command: Literal["play_pause", "next_track", "previous_track"]
+
+
+class MediaPlayerVolumeRequest(BaseModel):
+    volume: float = Field(ge=0.0, le=1.0)

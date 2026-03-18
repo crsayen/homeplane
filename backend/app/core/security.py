@@ -1,4 +1,4 @@
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Query, status
 
 from app.core.config import Settings, get_settings
 
@@ -16,3 +16,12 @@ def require_api_key(
     settings: Settings = Depends(get_settings),
 ) -> None:
     validate_api_key_value(x_homeplane_key, settings)
+
+
+def require_api_key_or_query(
+    x_homeplane_key: str | None = Header(default=None),
+    api_key: str | None = Query(default=None),
+    settings: Settings = Depends(get_settings),
+) -> None:
+    """Accepts the API key via header OR query param (needed for <img src> / direct URL use)."""
+    validate_api_key_value(x_homeplane_key or api_key, settings)

@@ -33,6 +33,8 @@ class Settings(BaseSettings):
         default="./data/lighting.config.json",
         alias="LIGHTING_CONFIG_SEED_PATH",
     )
+    kiosk_config_path: str = Field(default="./data/kiosk.config.json", alias="KIOSK_CONFIG_PATH")
+    kiosk_config_seed_path: str = Field(default="./data/kiosk.config.json", alias="KIOSK_CONFIG_SEED_PATH")
 
     @field_validator("allowed_origins", mode="before")
     @classmethod

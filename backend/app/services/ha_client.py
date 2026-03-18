@@ -12,17 +12,25 @@ from fastapi import HTTPException, status
 
 class HomeAssistantClient:
     def __init__(self, base_url: str, token: str, timeout_seconds: float = 10.0) -> None:
+        auth_headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-            },
+            headers=auth_headers,
             timeout=timeout_seconds,
+        )
+        # Separate client for camera streams — no read timeout so the stream stays open
+        self._stream_client = httpx.AsyncClient(
+            base_url=base_url.rstrip("/"),
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=httpx.Timeout(connect=10.0, read=None, write=None, pool=None),
         )
 
     async def close(self) -> None:
         await self._client.aclose()
+        await self._stream_client.aclose()
 
     async def get_state(self, entity_id: str) -> dict[str, Any]:
         response = await self._client.get(f"/api/states/{entity_id}")
@@ -32,6 +40,19 @@ class HomeAssistantClient:
 
         self._raise_on_error(response, "Failed to fetch entity state")
         return response.json()
+
+    async def get_camera_snapshot(self, entity_id: str) -> tuple[bytes, str]:
+        response = await self._client.get(f"/api/camera_proxy/{entity_id}")
+        self._raise_on_error(response, f"Failed to fetch camera snapshot: {entity_id}")
+        content_type = response.headers.get("content-type", "image/jpeg")
+        return response.content, content_type
+
+    async def iter_camera_stream(self, entity_id: str) -> AsyncIterator[bytes]:
+        async with self._stream_client.stream("GET", f"/api/camera_proxy_stream/{entity_id}") as response:
+            if not response.is_success:
+                raise HTTPException(status_code=response.status_code, detail="Camera stream unavailable")
+            async for chunk in response.aiter_bytes(chunk_size=8192):
+                yield chunk
 
     async def call_service(self, domain: str, service: str, data: dict[str, Any]) -> list[dict[str, Any]]:
         response = await self._client.post(f"/api/services/{domain}/{service}", json=data)

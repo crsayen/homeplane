@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from typing import Literal
 
 from app.schemas.actions import EntityStateResponse, HomeAssistantServiceResult
 from app.services.ha_client import HomeAssistantClient
@@ -56,6 +57,29 @@ class HomeOrchestrator:
     async def set_number_value(self, entity_id: str, value: float) -> list[HomeAssistantServiceResult]:
         payload: dict[str, object] = {"entity_id": entity_id, "value": value}
         result = await self._ha_client.call_service("number", "set_value", payload)
+        return [HomeAssistantServiceResult.model_validate(item) for item in result]
+
+    async def media_player_command(
+        self,
+        entity_id: str,
+        command: Literal["play_pause", "next_track", "previous_track"],
+    ) -> list[HomeAssistantServiceResult]:
+        service_map: dict[str, str] = {
+            "play_pause": "media_play_pause",
+            "next_track": "media_next_track",
+            "previous_track": "media_previous_track",
+        }
+        result = await self._ha_client.call_service(
+            "media_player", service_map[command], {"entity_id": entity_id}
+        )
+        return [HomeAssistantServiceResult.model_validate(item) for item in result]
+
+    async def set_media_player_volume(self, entity_id: str, volume: float) -> list[HomeAssistantServiceResult]:
+        result = await self._ha_client.call_service(
+            "media_player",
+            "volume_set",
+            {"entity_id": entity_id, "volume_level": volume},
+        )
         return [HomeAssistantServiceResult.model_validate(item) for item in result]
 
     async def stream_entity_states(self, entity_ids: set[str]) -> AsyncIterator[EntityStateResponse]:

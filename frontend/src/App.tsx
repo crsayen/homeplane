@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { KioskDashboard } from "./components/KioskDashboard";
 import { LightingDashboard } from "./components/LightingDashboard";
 import { MultiRoomAudioDashboard } from "./components/MultiRoomAudioDashboard";
 import { nextUiDensity, uiDensityLabel, UiDensity, useUiDensity } from "./lib/uiDensity";
@@ -115,6 +116,10 @@ export function App() {
         setDensityMode={setLightingDensityMode}
       />
     );
+  }
+
+  if (path === "/kiosk") {
+    return <KioskDashboard apiBaseUrl={apiBaseUrl} apiKey={apiKey} />;
   }
 
   if (path === "/") {
