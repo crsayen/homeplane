@@ -159,6 +159,18 @@ function MusicPanel({
   const artist = mediaState?.attributes.media_artist as string | undefined;
   const albumArt = mediaState?.attributes.entity_picture as string | undefined;
 
+  // Keep showing previous track info during brief transitions (e.g. skipping)
+  const lastTrackRef = useRef<{ title?: string; artist?: string; albumArt?: string } | null>(null);
+  if (isPlaying && title) {
+    lastTrackRef.current = { title, artist, albumArt };
+  }
+  const displayTrack = isPlaying && title ? { title, artist, albumArt } : lastTrackRef.current;
+  const showPlaying = isPlaying || (mediaState?.state !== "paused" && mediaState?.state !== "off" && lastTrackRef.current !== null);
+  // Clear stale track when definitively stopped
+  if (mediaState?.state === "paused" || mediaState?.state === "off") {
+    lastTrackRef.current = null;
+  }
+
   const allOn = INDOOR_SWITCHES.every((id) => switchStates.get(id) === "on");
   const someOn = INDOOR_SWITCHES.some((id) => switchStates.get(id) === "on");
 
@@ -166,7 +178,7 @@ function MusicPanel({
   let buttonLabel: string;
   let buttonIcon: string;
   let buttonAction: () => void;
-  if (!isPlaying) {
+  if (!showPlaying) {
     buttonLabel = "Play Music";
     buttonIcon = "▶";
     buttonAction = onPlayMusic;
@@ -185,7 +197,7 @@ function MusicPanel({
       <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-semibold">Music</div>
 
       {/* Shuffle / next — dead center of panel */}
-      {isPlaying && (
+      {showPlaying && (
         <button
           type="button"
           onClick={onSkip}
@@ -197,21 +209,21 @@ function MusicPanel({
 
       {/* Track info */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        {isPlaying && (title ?? artist) ? (
+        {showPlaying && displayTrack ? (
           <div className="flex gap-3 items-start">
-            {albumArt && (
+            {displayTrack.albumArt && (
               <img
-                src={albumArt}
+                src={displayTrack.albumArt}
                 alt=""
                 className="w-[6vw] h-[6vw] rounded-lg object-cover shrink-0"
               />
             )}
             <div className="min-w-0">
-              {title && (
-                <div className="text-[1.5vw] font-semibold text-white leading-tight line-clamp-2">{title}</div>
+              {displayTrack.title && (
+                <div className="text-[1.5vw] font-semibold text-white leading-tight line-clamp-2">{displayTrack.title}</div>
               )}
-              {artist && (
-                <div className="text-[1vw] text-white/40 mt-1 truncate">{artist}</div>
+              {displayTrack.artist && (
+                <div className="text-[1vw] text-white/40 mt-1 truncate">{displayTrack.artist}</div>
               )}
             </div>
           </div>
@@ -229,7 +241,7 @@ function MusicPanel({
           className={`flex items-center justify-center gap-2 py-2 px-4 rounded-lg transition text-[1.1vw] font-semibold ${
             pending
               ? "bg-white/5 text-white/30 cursor-wait"
-              : isPlaying
+              : showPlaying
                 ? "bg-white/10 text-white/70 hover:bg-white/15"
                 : "bg-white/10 text-white hover:bg-white/20"
           }`}
@@ -243,7 +255,7 @@ function MusicPanel({
         </button>
 
         {/* Stop button when playing everywhere (so user can still stop) */}
-        {isPlaying && !allOn && (
+        {showPlaying && !allOn && (
           <button
             type="button"
             onClick={onStopMusic}
