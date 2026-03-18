@@ -112,21 +112,30 @@ function WeatherPanel({ state, forecast }: { state: EntityStateResponse | null; 
   );
 }
 
+const INDOOR_SWITCHES = [
+  "switch.living_room_power",
+  "switch.kitchen_power",
+  "switch.casa_shea_power",
+  "switch.falcon_s_perch_power",
+  "switch.bedroom_power",
+  "switch.craftzone_power",
+] as const;
+
 function MusicPanel({
   mediaState,
-  speakersState,
+  switchStates,
   volumeState,
   onPlayMusic,
   onStopMusic,
-  onToggleSpeakers,
+  onPlayEverywhere,
   onVolumeCommit,
 }: {
   mediaState: EntityStateResponse | null;
-  speakersState: EntityStateResponse | null;
+  switchStates: Map<string, string>;
   volumeState: EntityStateResponse | null;
   onPlayMusic: () => void;
   onStopMusic: () => void;
-  onToggleSpeakers: () => void;
+  onPlayEverywhere: () => void;
   onVolumeCommit: (vol: number) => void;
 }) {
   const [localVolume, setLocalVolume] = useState<number | null>(null);
@@ -142,9 +151,29 @@ function MusicPanel({
 
   const displayVolume = localVolume ?? stateVolume;
   const isPlaying = mediaState?.state === "playing";
-  const speakersOn = speakersState?.state === "on";
   const title = mediaState?.attributes.media_title as string | undefined;
   const artist = mediaState?.attributes.media_artist as string | undefined;
+
+  const allOn = INDOOR_SWITCHES.every((id) => switchStates.get(id) === "on");
+  const someOn = INDOOR_SWITCHES.some((id) => switchStates.get(id) === "on");
+
+  // Determine button state
+  let buttonLabel: string;
+  let buttonIcon: string;
+  let buttonAction: () => void;
+  if (!isPlaying) {
+    buttonLabel = "Play Music";
+    buttonIcon = "▶";
+    buttonAction = onPlayMusic;
+  } else if (!allOn) {
+    buttonLabel = "Play Everywhere";
+    buttonIcon = "🔊";
+    buttonAction = onPlayEverywhere;
+  } else {
+    buttonLabel = "Stop Music";
+    buttonIcon = "⏹";
+    buttonAction = onStopMusic;
+  }
 
   return (
     <div className="h-full flex flex-col gap-3 overflow-hidden">
@@ -162,61 +191,59 @@ function MusicPanel({
             )}
           </>
         ) : (
-          <div className="text-[1vw] text-white/20">{isPlaying ? "Playing" : "Idle"}</div>
+          <div className="text-[1vw] text-white/20">Idle</div>
         )}
       </div>
 
       {/* Controls */}
       <div className="flex flex-col gap-3">
-        {/* Play / Stop */}
         <button
           type="button"
-          onClick={isPlaying ? onStopMusic : onPlayMusic}
+          onClick={buttonAction}
           className={`flex items-center justify-center gap-2 py-2 px-4 rounded-lg transition text-[1.1vw] font-semibold ${
             isPlaying
               ? "bg-white/10 text-white/70 hover:bg-white/15"
               : "bg-white/10 text-white hover:bg-white/20"
           }`}
         >
-          <span className="text-[1.4vw]">{isPlaying ? "⏹" : "▶"}</span>
-          {isPlaying ? "Stop Music" : "Play Music"}
+          <span className="text-[1.4vw]">{buttonIcon}</span>
+          {buttonLabel}
         </button>
+
+        {/* Stop button when playing everywhere (so user can still stop) */}
+        {isPlaying && !allOn && (
+          <button
+            type="button"
+            onClick={onStopMusic}
+            className="flex items-center justify-center gap-2 py-1.5 rounded-lg transition text-[0.9vw] font-medium bg-white/5 text-white/40 hover:bg-white/10"
+          >
+            <span>⏹</span> Stop Music
+          </button>
+        )}
 
         {/* Volume */}
-        <div className="flex items-center gap-2">
-          <span className="text-[0.9vw] text-white/20">🔈</span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={1}
-            value={displayVolume}
-            onChange={(e) => setLocalVolume(Number(e.target.value))}
-            onPointerUp={(e) => {
-              const vol = Number((e.target as HTMLInputElement).value);
-              setLocalVolume(null);
-              onVolumeCommit(vol);
-            }}
-            className="volume-slider flex-1"
-          />
-          <span className="text-[0.8vw] text-white/25 tabular-nums w-8 text-right">
-            {Math.round(displayVolume)}
-          </span>
-        </div>
-
-        {/* Indoor speakers toggle */}
-        <button
-          type="button"
-          onClick={onToggleSpeakers}
-          className={`flex items-center justify-center gap-2 py-1.5 rounded-lg transition text-[0.9vw] font-medium ${
-            speakersOn
-              ? "bg-white/15 text-white/80"
-              : "bg-white/5 text-white/30 hover:bg-white/10"
-          }`}
-        >
-          <span className={`w-2 h-2 rounded-full ${speakersOn ? "bg-green-400" : "bg-white/20"}`} />
-          Indoor Speakers {speakersOn ? "On" : "Off"}
-        </button>
+        {(isPlaying || someOn) && (
+          <div className="flex items-center gap-2">
+            <span className="text-[0.9vw] text-white/20">🔈</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={displayVolume}
+              onChange={(e) => setLocalVolume(Number(e.target.value))}
+              onPointerUp={(e) => {
+                const vol = Number((e.target as HTMLInputElement).value);
+                setLocalVolume(null);
+                onVolumeCommit(vol);
+              }}
+              className="volume-slider flex-1"
+            />
+            <span className="text-[0.8vw] text-white/25 tabular-nums w-8 text-right">
+              {Math.round(displayVolume)}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -426,7 +453,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
   const [weatherState, setWeatherState] = useState<EntityStateResponse | null>(null);
   const [weatherForecast, setWeatherForecast] = useState<WeatherForecastItem[]>([]);
   const [mediaState, setMediaState] = useState<EntityStateResponse | null>(null);
-  const [indoorSpeakersState, setIndoorSpeakersState] = useState<EntityStateResponse | null>(null);
+  const [indoorSwitchStates, setIndoorSwitchStates] = useState<Map<string, string>>(new Map());
   const [indoorVolumeState, setIndoorVolumeState] = useState<EntityStateResponse | null>(null);
   const [doorbellActive, setDoorbellActive] = useState(false);
   const [doorbellAutoCloseAt, setDoorbellAutoCloseAt] = useState(new Date());
@@ -512,10 +539,16 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
     return () => { cancelled = true; clearInterval(id); };
   }, [client, config?.media_player_entity]);
 
-  // Fetch indoor speaker + volume state on mount
+  // Fetch indoor switch + volume states on mount
   useEffect(() => {
-    client.getEntityState("input_boolean.indoor_speakers")
-      .then(setIndoorSpeakersState).catch(() => {});
+    Promise.all(INDOOR_SWITCHES.map((id) => client.getEntityState(id).catch(() => null)))
+      .then((states) => {
+        const map = new Map<string, string>();
+        for (const s of states) {
+          if (s) map.set(s.entity_id, s.state);
+        }
+        setIndoorSwitchStates(map);
+      });
     client.getEntityState("input_number.indoor_volume")
       .then(setIndoorVolumeState).catch(() => {});
   }, [client]);
@@ -526,8 +559,8 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
     const ids = [
       config.media_player_entity,
       config.doorbell_sensor_entity,
-      "input_boolean.indoor_speakers",
       "input_number.indoor_volume",
+      ...INDOOR_SWITCHES,
     ].filter(Boolean);
     if (ids.length === 0) return;
 
@@ -550,8 +583,8 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
           if (state.entity_id === config.media_player_entity) {
             setMediaState(state);
           }
-          if (state.entity_id === "input_boolean.indoor_speakers") {
-            setIndoorSpeakersState(state);
+          if ((INDOOR_SWITCHES as readonly string[]).includes(state.entity_id)) {
+            setIndoorSwitchStates((prev) => new Map(prev).set(state.entity_id, state.state));
           }
           if (state.entity_id === "input_number.indoor_volume") {
             setIndoorVolumeState(state);
@@ -591,8 +624,8 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
     client.runScript("script.stop_music_indoor").catch(() => {});
   };
 
-  const handleToggleSpeakers = () => {
-    client.toggleInputBoolean("input_boolean.indoor_speakers").catch(() => {});
+  const handlePlayEverywhere = () => {
+    client.runScript("script.indoor_speakers_on").catch(() => {});
   };
 
   const handleVolumeCommit = (vol: number) => {
@@ -656,11 +689,11 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
         <div className="p-5 overflow-hidden min-w-0">
           <MusicPanel
             mediaState={mediaState}
-            speakersState={indoorSpeakersState}
+            switchStates={indoorSwitchStates}
             volumeState={indoorVolumeState}
             onPlayMusic={handlePlayMusic}
             onStopMusic={handleStopMusic}
-            onToggleSpeakers={handleToggleSpeakers}
+            onPlayEverywhere={handlePlayEverywhere}
             onVolumeCommit={handleVolumeCommit}
           />
         </div>
