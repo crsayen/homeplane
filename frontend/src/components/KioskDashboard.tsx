@@ -427,6 +427,7 @@ function DoorbellOverlay({
           console.log("[doorbell] got track", event.track.kind);
           if (videoRef.current && event.streams[0]) {
             videoRef.current.srcObject = event.streams[0];
+            videoRef.current.play().catch(() => {});
           }
         };
         pc.oniceconnectionstatechange = () => {
