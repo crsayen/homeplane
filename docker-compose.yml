@@ -40,8 +40,8 @@ services:
     image: alexxit/go2rtc
     volumes:
       - ./go2rtc.yaml:/config/go2rtc.yaml:ro
-    ports:
-      - "1984:1984"
+    expose:
+      - "1984"
     restart: unless-stopped
     networks:
       - homeplane
