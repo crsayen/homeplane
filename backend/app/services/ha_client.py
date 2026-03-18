@@ -53,12 +53,24 @@ class HomeAssistantClient:
         content_type = response.headers.get("content-type", "image/jpeg")
         return response.content, content_type
 
-    async def iter_camera_stream(self, entity_id: str) -> AsyncIterator[bytes]:
-        async with self._stream_client.stream("GET", f"/api/camera_proxy_stream/{entity_id}") as response:
-            if not response.is_success:
-                raise HTTPException(status_code=response.status_code, detail="Camera stream unavailable")
-            async for chunk in response.aiter_bytes(chunk_size=8192):
-                yield chunk
+    async def open_camera_stream(self, entity_id: str) -> tuple[AsyncIterator[bytes], str]:
+        response = await self._stream_client.send(
+            self._stream_client.build_request("GET", f"/api/camera_proxy_stream/{entity_id}"),
+            stream=True,
+        )
+        if not response.is_success:
+            await response.aclose()
+            raise HTTPException(status_code=response.status_code, detail="Camera stream unavailable")
+        content_type = response.headers.get("content-type", "multipart/x-mixed-replace; boundary=--frameboundary")
+
+        async def generate() -> AsyncIterator[bytes]:
+            try:
+                async for chunk in response.aiter_bytes(chunk_size=8192):
+                    yield chunk
+            finally:
+                await response.aclose()
+
+        return generate(), content_type
 
     async def call_service(self, domain: str, service: str, data: dict[str, Any]) -> list[dict[str, Any]]:
         response = await self._client.post(f"/api/services/{domain}/{service}", json=data)

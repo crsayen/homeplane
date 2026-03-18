@@ -327,14 +327,11 @@ async def get_camera_snapshot(entity_id: str, request: Request) -> Response:
 async def stream_camera(entity_id: str, request: Request) -> StreamingResponse:
     validate_entity_domain(entity_id, "camera")
     ha_client: HomeAssistantClient = request.app.state.ha_client
-
-    async def generate() -> AsyncIterator[bytes]:
-        async for chunk in ha_client.iter_camera_stream(entity_id):
-            yield chunk
+    stream, content_type = await ha_client.open_camera_stream(entity_id)
 
     return StreamingResponse(
-        generate(),
-        media_type="multipart/x-mixed-replace; boundary=--myboundary",
+        stream,
+        media_type=content_type,
         headers={"Cache-Control": "no-cache"},
     )
 
