@@ -199,6 +199,13 @@ export class HomeplaneClient {
     return `${this.baseUrl}/api/media-player/${encodeURIComponent(entityId)}/image?api_key=${encodeURIComponent(this.apiKey)}`;
   }
 
+  async getCameraHlsUrl(entityId: string): Promise<string> {
+    const result = await this.request<{ url: string }>(`/api/camera/${encodeURIComponent(entityId)}/hls`, {
+      method: "GET",
+    });
+    return result.url;
+  }
+
   getCameraSnapshotUrl(entityId: string): string {
     return `${this.baseUrl}/api/camera/${encodeURIComponent(entityId)}/snapshot?api_key=${encodeURIComponent(this.apiKey)}`;
   }

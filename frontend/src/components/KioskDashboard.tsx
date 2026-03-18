@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import Hls from "hls.js";
 
 import { EntityStateResponse, HomeplaneClient, KioskConfig, WeatherForecastItem } from "../api/homeplaneClient";
 
@@ -391,7 +392,13 @@ function DoorbellOverlay({
   onDismiss: () => void;
 }) {
   const [secondsLeft, setSecondsLeft] = useState(30);
+  const [hlsUrl, setHlsUrl] = useState<string | null>(null);
+  const [hlsFailed, setHlsFailed] = useState(false);
   const [snapshotTs, setSnapshotTs] = useState(Date.now());
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
+
+  const camEntity = config.doorbell_camera_entity;
 
   // Countdown + auto-dismiss
   useEffect(() => {
@@ -403,13 +410,45 @@ function DoorbellOverlay({
     return () => clearInterval(id);
   }, [autoCloseAt, onDismiss]);
 
-  // Snapshot refresh (every 1s)
+  // Request HLS stream URL
   useEffect(() => {
+    if (!camEntity) return;
+    client.getCameraHlsUrl(camEntity)
+      .then(setHlsUrl)
+      .catch(() => setHlsFailed(true));
+  }, [client, camEntity]);
+
+  // Attach HLS.js to video element
+  useEffect(() => {
+    if (!hlsUrl || !videoRef.current) return;
+    if (!Hls.isSupported()) {
+      // Safari has native HLS — try direct
+      videoRef.current.src = hlsUrl;
+      videoRef.current.play().catch(() => setHlsFailed(true));
+      return;
+    }
+    const hls = new Hls({ liveDurationInfinity: true, liveBackBufferLength: 0 });
+    hlsRef.current = hls;
+    hls.loadSource(hlsUrl);
+    hls.attachMedia(videoRef.current);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      videoRef.current?.play().catch(() => {});
+    });
+    hls.on(Hls.Events.ERROR, (_event, data) => {
+      if (data.fatal) setHlsFailed(true);
+    });
+    return () => {
+      hls.destroy();
+      hlsRef.current = null;
+    };
+  }, [hlsUrl]);
+
+  // Fallback snapshot refresh (every 1s) when HLS fails
+  useEffect(() => {
+    if (!hlsFailed) return;
     const id = setInterval(() => setSnapshotTs(Date.now()), 1000);
     return () => clearInterval(id);
-  }, []);
-
-  const camEntity = config.doorbell_camera_entity;
+  }, [hlsFailed]);
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
@@ -431,15 +470,23 @@ function DoorbellOverlay({
         </div>
       </div>
 
-      {/* Camera feed (snapshots every 1s) */}
+      {/* Camera feed */}
       <div className="flex-1 flex items-center justify-center overflow-hidden bg-black">
         {!camEntity ? (
           <div className="text-white/30 text-[2vw]">No doorbell camera configured</div>
-        ) : (
+        ) : hlsFailed ? (
           <img
             key={snapshotTs}
             src={`${client.getCameraSnapshotUrl(camEntity)}&t=${snapshotTs}`}
             alt="Doorbell"
+            className="max-w-full max-h-full object-contain"
+          />
+        ) : (
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
             className="max-w-full max-h-full object-contain"
           />
         )}

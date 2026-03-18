@@ -310,6 +310,15 @@ async def get_media_player_image(entity_id: str, request: Request) -> Response:
     )
 
 
+@router.get("/camera/{entity_id}/hls", dependencies=[Depends(require_api_key)])
+async def get_camera_hls(entity_id: str, request: Request) -> dict:
+    validate_entity_domain(entity_id, "camera")
+    await request.app.state.rate_limiter.check(request)
+    ha_client: HomeAssistantClient = request.app.state.ha_client
+    url = await ha_client.get_camera_hls_stream(entity_id)
+    return {"url": url}
+
+
 @router.get("/camera/{entity_id}/snapshot", dependencies=[Depends(require_api_key_or_query)])
 async def get_camera_snapshot(entity_id: str, request: Request) -> Response:
     validate_entity_domain(entity_id, "camera")

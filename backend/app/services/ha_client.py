@@ -41,6 +41,29 @@ class HomeAssistantClient:
         self._raise_on_error(response, "Failed to fetch entity state")
         return response.json()
 
+    async def get_camera_hls_stream(self, entity_id: str) -> str:
+        """Request an HLS stream URL from HA via WebSocket."""
+        import websockets as ws_lib
+
+        ws_url = self._build_ws_url()
+        token = self._client.headers["Authorization"].split(" ", 1)[1]
+        async with ws_lib.connect(ws_url, max_size=2**20) as websocket:
+            await websocket.recv()  # auth_required
+            await websocket.send(json.dumps({"type": "auth", "access_token": token}))
+            auth_result = json.loads(await websocket.recv())
+            if auth_result.get("type") != "auth_ok":
+                raise HTTPException(status_code=502, detail="HA websocket auth failed")
+
+            await websocket.send(json.dumps({
+                "id": 1,
+                "type": "camera/stream",
+                "entity_id": entity_id,
+            }))
+            result = json.loads(await websocket.recv())
+            if not result.get("success"):
+                raise HTTPException(status_code=502, detail="Failed to start camera stream")
+            return str(self._client.base_url).rstrip("/") + result["result"]["url"]
+
     async def get_media_player_image(self, proxy_path: str) -> tuple[bytes, str]:
         response = await self._client.get(proxy_path)
         self._raise_on_error(response, "Failed to fetch media player image")
