@@ -129,6 +129,7 @@ const INDOOR_SWITCHES = [
 
 function MusicPanel({
   displayState,
+  albumArtUrl,
   switchStates,
   volumeState,
   pending,
@@ -141,6 +142,7 @@ function MusicPanel({
   onVolumeCommit,
 }: {
   displayState: EntityStateResponse | null;
+  albumArtUrl: string | undefined;
   switchStates: Map<string, string>;
   volumeState: EntityStateResponse | null;
   pending: boolean;
@@ -167,14 +169,13 @@ function MusicPanel({
   const isPlaying = displayState?.state === "playing";
   const title = displayState?.attributes.media_title as string | undefined;
   const artist = displayState?.attributes.media_artist as string | undefined;
-  const albumArt = displayState?.attributes.entity_picture as string | undefined;
 
   // Keep showing previous track info during brief transitions (e.g. skipping).
   // Times out after 5s so externally-stopped music doesn't show stale info.
-  const lastTrackRef = useRef<{ title?: string; artist?: string; albumArt?: string } | null>(null);
+  const lastTrackRef = useRef<{ title?: string; artist?: string; albumArtUrl?: string } | null>(null);
   const [transitionExpired, setTransitionExpired] = useState(false);
   if (isPlaying && title) {
-    lastTrackRef.current = { title, artist, albumArt };
+    lastTrackRef.current = { title, artist, albumArtUrl };
   }
   if (displayState?.state === "paused" || displayState?.state === "off") {
     lastTrackRef.current = null;
@@ -192,7 +193,7 @@ function MusicPanel({
     return () => window.clearTimeout(timer);
   }, [isPlaying, transitionExpired]);
 
-  const displayTrack = isPlaying && title ? { title, artist, albumArt } : lastTrackRef.current;
+  const displayTrack = isPlaying && title ? { title, artist, albumArtUrl } : lastTrackRef.current;
   const showPlaying = isPlaying || (displayTrack !== null && !transitionExpired);
 
   const allOn = INDOOR_SWITCHES.every((id) => switchStates.get(id) === "on");
@@ -251,9 +252,9 @@ function MusicPanel({
       <div className="flex-1 min-h-0 overflow-hidden">
         {showPlaying && displayTrack ? (
           <div className="flex gap-3 items-start">
-            {displayTrack.albumArt && (
+            {displayTrack.albumArtUrl && (
               <img
-                src={displayTrack.albumArt}
+                src={displayTrack.albumArtUrl}
                 alt=""
                 className="w-[6vw] h-[6vw] rounded-lg object-cover shrink-0"
               />
@@ -744,6 +745,14 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
   const activeMediaState = maHasTrack ? wiimMaState : wiimNativeState;
   const activeMediaEntity = maHasTrack ? WIIM_MA_ENTITY : WIIM_NATIVE_ENTITY;
 
+  // Resolve album art — HA local proxy paths need to go through our backend
+  const rawPicture = activeMediaState?.attributes.entity_picture as string | undefined;
+  const activeAlbumArtUrl = rawPicture
+    ? rawPicture.startsWith("/api/")
+      ? client.getMediaPlayerImageUrl(activeMediaState!.entity_id)
+      : rawPicture
+    : undefined;
+
   const handlePlayMusic = () => {
     setMusicPending(true);
     client.runScript("script.play_music").catch(() => {});
@@ -838,6 +847,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
         <div className="p-5 overflow-hidden min-w-0">
           <MusicPanel
             displayState={activeMediaState}
+            albumArtUrl={activeAlbumArtUrl}
             switchStates={indoorSwitchStates}
             volumeState={indoorVolumeState}
             pending={musicPending}

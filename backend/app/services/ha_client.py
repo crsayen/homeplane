@@ -41,6 +41,12 @@ class HomeAssistantClient:
         self._raise_on_error(response, "Failed to fetch entity state")
         return response.json()
 
+    async def get_media_player_image(self, proxy_path: str) -> tuple[bytes, str]:
+        response = await self._client.get(proxy_path)
+        self._raise_on_error(response, "Failed to fetch media player image")
+        content_type = response.headers.get("content-type", "image/jpeg")
+        return response.content, content_type
+
     async def get_camera_snapshot(self, entity_id: str) -> tuple[bytes, str]:
         response = await self._client.get(f"/api/camera_proxy/{entity_id}")
         self._raise_on_error(response, f"Failed to fetch camera snapshot: {entity_id}")

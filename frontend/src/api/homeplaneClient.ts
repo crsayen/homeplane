@@ -195,6 +195,10 @@ export class HomeplaneClient {
     });
   }
 
+  getMediaPlayerImageUrl(entityId: string): string {
+    return `${this.baseUrl}/api/media-player/${encodeURIComponent(entityId)}/image?api_key=${encodeURIComponent(this.apiKey)}`;
+  }
+
   getCameraSnapshotUrl(entityId: string): string {
     return `${this.baseUrl}/api/camera/${encodeURIComponent(entityId)}/snapshot?api_key=${encodeURIComponent(this.apiKey)}`;
   }

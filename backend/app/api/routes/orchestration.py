@@ -296,6 +296,20 @@ async def update_kiosk_config(request: Request, payload: KioskConfig) -> KioskCo
     return await request.app.state.kiosk_config_store.save(payload)
 
 
+@router.get("/media-player/{entity_id}/image", dependencies=[Depends(require_api_key_or_query)])
+async def get_media_player_image(entity_id: str, request: Request) -> Response:
+    validate_entity_domain(entity_id, "media_player")
+    await request.app.state.rate_limiter.check(request)
+    ha_client: HomeAssistantClient = request.app.state.ha_client
+    proxy_path = f"/api/media_player_proxy/{entity_id}"
+    image_bytes, content_type = await ha_client.get_media_player_image(proxy_path)
+    return Response(
+        content=image_bytes,
+        media_type=content_type,
+        headers={"Cache-Control": "no-cache, no-store"},
+    )
+
+
 @router.get("/camera/{entity_id}/snapshot", dependencies=[Depends(require_api_key_or_query)])
 async def get_camera_snapshot(entity_id: str, request: Request) -> Response:
     validate_entity_domain(entity_id, "camera")
