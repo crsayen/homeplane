@@ -363,7 +363,6 @@ function CamerasPanel({
       <div className="flex-1 min-h-0 rounded-xl bg-black/50 overflow-hidden flex items-center justify-center">
         {config?.package_camera_entity ? (
           <img
-            key={camTimestamp}
             src={`${client.getCameraSnapshotUrl(config.package_camera_entity)}&t=${camTimestamp}`}
             alt="Package Camera"
             className="w-full h-full object-cover"
@@ -377,7 +376,6 @@ function CamerasPanel({
       <div className="h-[4.5vw] rounded-lg bg-black/50 overflow-hidden flex items-center justify-center">
         {config?.doorbell_camera_entity ? (
           <img
-            key={`db-${camTimestamp}`}
             src={`${client.getCameraSnapshotUrl(config.doorbell_camera_entity)}&t=${camTimestamp}`}
             alt="Doorbell Camera"
             className="w-full h-full object-cover"
