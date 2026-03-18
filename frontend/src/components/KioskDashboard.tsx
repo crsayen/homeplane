@@ -414,7 +414,9 @@ function DoorbellOverlay({
 
     const startWebRTC = async () => {
       try {
-        const pc = new RTCPeerConnection({ iceServers: [] });
+        const pc = new RTCPeerConnection({
+          iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+        });
         pcRef.current = pc;
 
         pc.addTransceiver("video", { direction: "recvonly" });
@@ -435,11 +437,15 @@ function DoorbellOverlay({
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
-        // Wait for ICE gathering to complete
+        // Wait for ICE gathering to complete (with timeout)
         if (pc.iceGatheringState !== "complete") {
           await new Promise<void>((resolve) => {
+            const timer = setTimeout(resolve, 3000);
             const check = () => {
-              if (pc.iceGatheringState === "complete") resolve();
+              if (pc.iceGatheringState === "complete") {
+                clearTimeout(timer);
+                resolve();
+              }
             };
             pc.addEventListener("icegatheringstatechange", check);
             check();
