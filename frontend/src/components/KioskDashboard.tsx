@@ -414,6 +414,7 @@ function DoorbellOverlay({
 
     const startWebRTC = async () => {
       try {
+        console.log("[doorbell] starting WebRTC");
         const pc = new RTCPeerConnection({
           iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
         });
@@ -423,12 +424,14 @@ function DoorbellOverlay({
         pc.addTransceiver("audio", { direction: "recvonly" });
 
         pc.ontrack = (event) => {
+          console.log("[doorbell] got track", event.track.kind);
           if (videoRef.current && event.streams[0]) {
             videoRef.current.srcObject = event.streams[0];
           }
         };
         pc.oniceconnectionstatechange = () => {
           const s = pc.iceConnectionState;
+          console.log("[doorbell] ICE connection state:", s);
           if (s === "failed" || s === "disconnected" || s === "closed") {
             if (!cancelled) setVideoFailed(true);
           }
@@ -436,13 +439,15 @@ function DoorbellOverlay({
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
+        console.log("[doorbell] offer created, gathering ICE...");
 
         // Wait for ICE gathering to complete (with timeout)
         if (pc.iceGatheringState !== "complete") {
           await new Promise<void>((resolve) => {
-            const timer = setTimeout(resolve, 3000);
+            const timer = setTimeout(() => { console.log("[doorbell] ICE gather timeout"); resolve(); }, 3000);
             const check = () => {
               if (pc.iceGatheringState === "complete") {
+                console.log("[doorbell] ICE gather complete");
                 clearTimeout(timer);
                 resolve();
               }
@@ -452,18 +457,22 @@ function DoorbellOverlay({
           });
         }
 
+        console.log("[doorbell] sending offer to go2rtc...");
         // Send offer with ICE candidates to go2rtc's HTTP API via Caddy
         const resp = await fetch(`/go2rtc/api/webrtc?src=doorbell`, {
           method: "POST",
           body: pc.localDescription!.sdp,
         });
+        console.log("[doorbell] go2rtc response:", resp.status);
         if (!resp.ok) throw new Error(`go2rtc returned ${resp.status}`);
         const answerSdp = await resp.text();
 
         if (cancelled) { pc.close(); return; }
 
         await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
-      } catch {
+        console.log("[doorbell] remote description set, waiting for tracks...");
+      } catch (err) {
+        console.error("[doorbell] WebRTC failed:", err);
         if (!cancelled) setVideoFailed(true);
       }
     };
