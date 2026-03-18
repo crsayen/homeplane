@@ -735,6 +735,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
     const ids = [
       WIIM_NATIVE_ENTITY,
       WIIM_MA_ENTITY,
+      config.weather_entity,
       config.doorbell_sensor_entity,
       "input_number.indoor_volume",
       ...INDOOR_SWITCHES,
@@ -762,6 +763,9 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
           }
           if (state.entity_id === WIIM_MA_ENTITY) {
             setWiimMaState(state);
+          }
+          if (state.entity_id === config.weather_entity) {
+            setWeatherState(state);
           }
           if ((INDOOR_SWITCHES as readonly string[]).includes(state.entity_id)) {
             setIndoorSwitchStates((prev) => new Map(prev).set(state.entity_id, state.state));
@@ -918,8 +922,9 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
           </div>
           <iframe
             src="/dashboards/audio"
-            className="flex-1 w-full border-none"
+            className="flex-1 w-full border-none bg-[#050505]"
             title="Room Controls"
+            style={{ colorScheme: "dark" }}
           />
         </div>
       )}
