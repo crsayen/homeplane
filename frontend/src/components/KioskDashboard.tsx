@@ -427,7 +427,15 @@ function DoorbellOverlay({
       videoRef.current.play().catch(() => setHlsFailed(true));
       return;
     }
-    const hls = new Hls({ liveDurationInfinity: true, liveBackBufferLength: 0 });
+    const hls = new Hls({
+      liveDurationInfinity: true,
+      liveBackBufferLength: 0,
+      manifestLoadingMaxRetry: 5,
+      manifestLoadingRetryDelay: 2000,
+      levelLoadingMaxRetry: 5,
+      levelLoadingRetryDelay: 2000,
+      fragLoadingMaxRetry: 5,
+    });
     hlsRef.current = hls;
     hls.loadSource(hlsUrl);
     hls.attachMedia(videoRef.current);

@@ -65,7 +65,7 @@ class HomeAssistantClient:
             return result["result"]["url"]
 
     async def proxy_ha_path(self, path: str) -> tuple[bytes, str]:
-        response = await self._client.get(path)
+        response = await self._client.get(path, timeout=30.0)
         self._raise_on_error(response, f"Failed to proxy HA path: {path}")
         content_type = response.headers.get("content-type", "application/octet-stream")
         return response.content, content_type
