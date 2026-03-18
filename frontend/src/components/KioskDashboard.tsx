@@ -133,6 +133,8 @@ function MusicPanel({
   onStopMusic,
   onPlayEverywhere,
   onSkip,
+  onPlayPause,
+  onPrevious,
   onVolumeCommit,
 }: {
   displayState: EntityStateResponse | null;
@@ -143,6 +145,8 @@ function MusicPanel({
   onStopMusic: () => void;
   onPlayEverywhere: () => void;
   onSkip: () => void;
+  onPlayPause: () => void;
+  onPrevious: () => void;
   onVolumeCommit: (vol: number) => void;
 }) {
   const [localVolume, setLocalVolume] = useState<number | null>(null);
@@ -213,15 +217,31 @@ function MusicPanel({
     <div className="h-full flex flex-col gap-3 overflow-hidden relative">
       <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-semibold">Music</div>
 
-      {/* Shuffle / next — dead center of panel */}
+      {/* Transport controls — dead center of panel */}
       {showPlaying && (
-        <button
-          type="button"
-          onClick={onSkip}
-          className="absolute inset-0 m-auto w-fit h-fit text-[4vw] active:scale-90 transition-transform z-10"
-        >
-          🎲
-        </button>
+        <div className="absolute inset-0 m-auto w-fit h-fit flex items-center gap-6 z-10">
+          <button
+            type="button"
+            onClick={onPrevious}
+            className="text-[2.5vw] text-white/50 active:scale-90 transition-transform"
+          >
+            ⏮
+          </button>
+          <button
+            type="button"
+            onClick={onPlayPause}
+            className="text-[3.5vw] text-white active:scale-90 transition-transform"
+          >
+            {isPlaying ? "⏸" : "▶"}
+          </button>
+          <button
+            type="button"
+            onClick={onSkip}
+            className="text-[2.5vw] text-white/50 active:scale-90 transition-transform"
+          >
+            ⏭
+          </button>
+        </div>
       )}
 
       {/* Track info */}
@@ -724,8 +744,15 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
   };
 
   const handleSkip = () => {
-    if (!config?.media_player_entity) return;
-    client.mediaPlayerCommand(config.media_player_entity, "next_track").catch(() => {});
+    client.mediaPlayerCommand(WIIM_DISPLAY_ENTITY, "next_track").catch(() => {});
+  };
+
+  const handlePlayPause = () => {
+    client.mediaPlayerCommand(WIIM_DISPLAY_ENTITY, "play_pause").catch(() => {});
+  };
+
+  const handlePrevious = () => {
+    client.mediaPlayerCommand(WIIM_DISPLAY_ENTITY, "previous_track").catch(() => {});
   };
 
   const handlePlayEverywhere = () => {
@@ -802,6 +829,8 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
             onStopMusic={handleStopMusic}
             onPlayEverywhere={handlePlayEverywhere}
             onSkip={handleSkip}
+            onPlayPause={handlePlayPause}
+            onPrevious={handlePrevious}
             onVolumeCommit={handleVolumeCommit}
           />
         </div>
