@@ -125,6 +125,7 @@ function MusicPanel({
   mediaState,
   switchStates,
   volumeState,
+  pending,
   onPlayMusic,
   onStopMusic,
   onPlayEverywhere,
@@ -133,6 +134,7 @@ function MusicPanel({
   mediaState: EntityStateResponse | null;
   switchStates: Map<string, string>;
   volumeState: EntityStateResponse | null;
+  pending: boolean;
   onPlayMusic: () => void;
   onStopMusic: () => void;
   onPlayEverywhere: () => void;
@@ -210,14 +212,21 @@ function MusicPanel({
         <button
           type="button"
           onClick={buttonAction}
+          disabled={pending}
           className={`flex items-center justify-center gap-2 py-2 px-4 rounded-lg transition text-[1.1vw] font-semibold ${
-            isPlaying
-              ? "bg-white/10 text-white/70 hover:bg-white/15"
-              : "bg-white/10 text-white hover:bg-white/20"
+            pending
+              ? "bg-white/5 text-white/30 cursor-wait"
+              : isPlaying
+                ? "bg-white/10 text-white/70 hover:bg-white/15"
+                : "bg-white/10 text-white hover:bg-white/20"
           }`}
         >
-          <span className="text-[1.4vw]">{buttonIcon}</span>
-          {buttonLabel}
+          {pending ? (
+            <span className="text-[1.4vw] animate-spin">⟳</span>
+          ) : (
+            <span className="text-[1.4vw]">{buttonIcon}</span>
+          )}
+          {pending ? "Starting…" : buttonLabel}
         </button>
 
         {/* Stop button when playing everywhere (so user can still stop) */}
@@ -463,6 +472,10 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
   const [weatherForecast, setWeatherForecast] = useState<WeatherForecastItem[]>([]);
   const [mediaState, setMediaState] = useState<EntityStateResponse | null>(null);
   const [indoorSwitchStates, setIndoorSwitchStates] = useState<Map<string, string>>(new Map());
+  const indoorSwitchStatesRef = useRef(indoorSwitchStates);
+  indoorSwitchStatesRef.current = indoorSwitchStates;
+  const [musicPending, setMusicPending] = useState(false);
+  const retryTimerRef = useRef<number | null>(null);
   const [indoorVolumeState, setIndoorVolumeState] = useState<EntityStateResponse | null>(null);
   const [doorbellActive, setDoorbellActive] = useState(false);
   const [doorbellAutoCloseAt, setDoorbellAutoCloseAt] = useState(new Date());
@@ -625,16 +638,55 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
     };
   }, [apiBaseUrl, apiKey, config]);
 
+  // Clear pending state as soon as all speakers are on
+  useEffect(() => {
+    if (musicPending && INDOOR_SWITCHES.every((id) => indoorSwitchStates.get(id) === "on")) {
+      setMusicPending(false);
+      if (retryTimerRef.current !== null) {
+        window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    }
+  }, [musicPending, indoorSwitchStates]);
+
+  const ensureSpeakersOn = (attemptsLeft: number) => {
+    if (attemptsLeft <= 0) {
+      setMusicPending(false);
+      return;
+    }
+    retryTimerRef.current = window.setTimeout(() => {
+      const current = indoorSwitchStatesRef.current;
+      const offSwitches = INDOOR_SWITCHES.filter((id) => current.get(id) !== "on");
+      if (offSwitches.length === 0) {
+        setMusicPending(false);
+        return;
+      }
+      for (const id of offSwitches) {
+        client.setSwitchState(id, { is_on: true }).catch(() => {});
+      }
+      ensureSpeakersOn(attemptsLeft - 1);
+    }, 3000);
+  };
+
   const handlePlayMusic = () => {
+    setMusicPending(true);
     client.runScript("script.play_music").catch(() => {});
+    ensureSpeakersOn(3);
   };
 
   const handleStopMusic = () => {
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+    setMusicPending(false);
     client.runScript("script.stop_music_indoor").catch(() => {});
   };
 
   const handlePlayEverywhere = () => {
+    setMusicPending(true);
     client.runScript("script.indoor_speakers_on").catch(() => {});
+    ensureSpeakersOn(3);
   };
 
   const handleVolumeCommit = (vol: number) => {
@@ -700,6 +752,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
             mediaState={mediaState}
             switchStates={indoorSwitchStates}
             volumeState={indoorVolumeState}
+            pending={musicPending}
             onPlayMusic={handlePlayMusic}
             onStopMusic={handleStopMusic}
             onPlayEverywhere={handlePlayEverywhere}
