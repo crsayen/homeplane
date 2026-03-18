@@ -420,10 +420,9 @@ function DoorbellOverlay({
       video.src = URL.createObjectURL(ms);
 
       ms.addEventListener("sourceopen", () => {
-        // Build WebSocket URL to go2rtc via Caddy
+        // Connect to go2rtc directly on port 1984
         const loc = window.location;
-        const wsProto = loc.protocol === "https:" ? "wss:" : "ws:";
-        const wsUrl = `${wsProto}//${loc.host}/go2rtc/api/ws?src=doorbell`;
+        const wsUrl = `ws://${loc.hostname}:1984/api/ws?src=doorbell`;
         const ws = new WebSocket(wsUrl);
         wsRef2.current = ws;
         ws.binaryType = "arraybuffer";
