@@ -36,10 +36,21 @@ services:
     networks:
       - homeplane
 
+  go2rtc:
+    image: alexxit/go2rtc
+    volumes:
+      - ./go2rtc.yaml:/config/go2rtc.yaml:ro
+    expose:
+      - "1984"
+    restart: unless-stopped
+    networks:
+      - homeplane
+
   caddy:
     image: caddy:2.8-alpine
     depends_on:
       - web
+      - go2rtc
     env_file:
       - ./docker-compose.env
     ports:

@@ -393,7 +393,8 @@ function DoorbellOverlay({
   const [videoFailed, setVideoFailed] = useState(false);
   const [snapshotTs, setSnapshotTs] = useState(Date.now());
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const wsRef2 = useRef<WebSocket | null>(null);
+  const msRef = useRef<MediaSource | null>(null);
 
   const camEntity = config.doorbell_camera_entity;
 
@@ -407,54 +408,90 @@ function DoorbellOverlay({
     return () => clearInterval(id);
   }, [autoCloseAt, onDismiss]);
 
-  // WebRTC connection
+  // go2rtc MSE stream via WebSocket
   useEffect(() => {
     if (!camEntity || !videoRef.current) return;
     let cancelled = false;
 
-    const startWebRTC = async () => {
-      try {
-        const pc = new RTCPeerConnection({ iceServers: [] });
-        pcRef.current = pc;
+    const startMSE = () => {
+      const video = videoRef.current!;
+      const ms = new MediaSource();
+      msRef.current = ms;
+      video.src = URL.createObjectURL(ms);
 
-        // We only receive video
-        pc.addTransceiver("video", { direction: "recvonly" });
+      ms.addEventListener("sourceopen", () => {
+        // Build WebSocket URL to go2rtc via Caddy
+        const loc = window.location;
+        const wsProto = loc.protocol === "https:" ? "wss:" : "ws:";
+        const wsUrl = `${wsProto}//${loc.host}/go2rtc/api/ws?src=doorbell`;
+        const ws = new WebSocket(wsUrl);
+        wsRef2.current = ws;
+        ws.binaryType = "arraybuffer";
 
-        pc.ontrack = (event) => {
-          if (videoRef.current) videoRef.current.srcObject = event.streams[0];
+        let sourceBuffer: SourceBuffer | null = null;
+        const queue: ArrayBuffer[] = [];
+        let appending = false;
+
+        const appendNext = () => {
+          if (!sourceBuffer || appending || queue.length === 0) return;
+          if (ms.readyState !== "open") return;
+          appending = true;
+          sourceBuffer.appendBuffer(queue.shift()!);
         };
-        pc.oniceconnectionstatechange = () => {
-          if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "disconnected") {
-            if (!cancelled) setVideoFailed(true);
+
+        ws.onmessage = (event) => {
+          if (typeof event.data === "string") {
+            // First message is the codec info (e.g. "mse" or JSON with codecs)
+            try {
+              const msg = JSON.parse(event.data);
+              if (msg.type === "mse" && msg.codecs) {
+                const mimeType = `video/mp4; codecs="${msg.codecs}"`;
+                if (MediaSource.isTypeSupported(mimeType)) {
+                  sourceBuffer = ms.addSourceBuffer(mimeType);
+                  sourceBuffer.mode = "segments";
+                  sourceBuffer.addEventListener("updateend", () => {
+                    appending = false;
+                    appendNext();
+                    // Keep latency low by trimming buffer
+                    if (sourceBuffer && !sourceBuffer.updating && video.buffered.length > 0) {
+                      const end = video.buffered.end(video.buffered.length - 1);
+                      if (end - video.currentTime > 2) {
+                        video.currentTime = end - 0.5;
+                      }
+                    }
+                  });
+                }
+              }
+            } catch {
+              // ignore non-JSON text messages
+            }
+            return;
           }
+          // Binary data — MP4 fragment
+          queue.push(event.data as ArrayBuffer);
+          appendNext();
         };
 
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
+        ws.onerror = () => { if (!cancelled) setVideoFailed(true); };
+        ws.onclose = () => { if (!cancelled) setVideoFailed(true); };
+      });
 
-        const result = await client.webrtcOffer(camEntity, offer.sdp!);
-
-        if (cancelled) { pc.close(); return; }
-
-        await pc.setRemoteDescription({ type: "answer", sdp: result.answer });
-
-        for (const c of result.candidates) {
-          await pc.addIceCandidate(c);
-        }
-      } catch {
-        if (!cancelled) setVideoFailed(true);
-      }
+      video.play().catch(() => {});
     };
 
-    startWebRTC();
+    startMSE();
     return () => {
       cancelled = true;
-      pcRef.current?.close();
-      pcRef.current = null;
+      wsRef2.current?.close();
+      wsRef2.current = null;
+      if (msRef.current?.readyState === "open") {
+        try { msRef.current.endOfStream(); } catch { /* ignore */ }
+      }
+      msRef.current = null;
     };
-  }, [client, camEntity]);
+  }, [camEntity]);
 
-  // Fallback snapshot refresh (every 1s) when WebRTC fails
+  // Fallback snapshot refresh (every 1s) when stream fails
   useEffect(() => {
     if (!videoFailed) return;
     const id = setInterval(() => setSnapshotTs(Date.now()), 1000);

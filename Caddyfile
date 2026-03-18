@@ -5,5 +5,11 @@
 
 {$HOMEPLANE_HOSTS} {
     encode zstd gzip
+
+    handle /go2rtc/* {
+        uri strip_prefix /go2rtc
+        reverse_proxy go2rtc:1984
+    }
+
     reverse_proxy web:80
 }
