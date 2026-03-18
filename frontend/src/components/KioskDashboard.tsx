@@ -435,10 +435,21 @@ function DoorbellOverlay({
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
-        // Send offer to go2rtc's HTTP API via Caddy
+        // Wait for ICE gathering to complete
+        if (pc.iceGatheringState !== "complete") {
+          await new Promise<void>((resolve) => {
+            const check = () => {
+              if (pc.iceGatheringState === "complete") resolve();
+            };
+            pc.addEventListener("icegatheringstatechange", check);
+            check();
+          });
+        }
+
+        // Send offer with ICE candidates to go2rtc's HTTP API via Caddy
         const resp = await fetch(`/go2rtc/api/webrtc?src=doorbell`, {
           method: "POST",
-          body: offer.sdp,
+          body: pc.localDescription!.sdp,
         });
         if (!resp.ok) throw new Error(`go2rtc returned ${resp.status}`);
         const answerSdp = await resp.text();
