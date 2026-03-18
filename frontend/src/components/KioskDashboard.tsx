@@ -1,15 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { EntityStateResponse, HomeplaneClient, KioskConfig, MediaPlayerCommand } from "../api/homeplaneClient";
-
-// ── Types ──────────────────────────────────────────────────────────────────────
-
-interface WeatherForecastItem {
-  datetime: string;
-  condition: string;
-  temperature: number;
-  templow?: number;
-}
+import { EntityStateResponse, HomeplaneClient, KioskConfig, MediaPlayerCommand, WeatherForecastItem } from "../api/homeplaneClient";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -66,7 +57,7 @@ function toWsUrl(apiBaseUrl: string): string {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function WeatherPanel({ state }: { state: EntityStateResponse | null }) {
+function WeatherPanel({ state, forecast }: { state: EntityStateResponse | null; forecast: WeatherForecastItem[] }) {
   if (!state) {
     return (
       <div className="h-full flex items-center justify-center text-white/20 text-sm">
@@ -77,7 +68,6 @@ function WeatherPanel({ state }: { state: EntityStateResponse | null }) {
 
   const temp = state.attributes.temperature as number | undefined;
   const unit = (state.attributes.temperature_unit as string | undefined) ?? "°F";
-  const forecast = (state.attributes.forecast as WeatherForecastItem[] | undefined) ?? [];
   const daily = forecast.slice(0, 5);
 
   return (
@@ -429,6 +419,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
   const [now, setNow] = useState(new Date());
   const [config, setConfig] = useState<KioskConfig | null>(null);
   const [weatherState, setWeatherState] = useState<EntityStateResponse | null>(null);
+  const [weatherForecast, setWeatherForecast] = useState<WeatherForecastItem[]>([]);
   const [mediaState, setMediaState] = useState<EntityStateResponse | null>(null);
   const [doorbellActive, setDoorbellActive] = useState(false);
   const [doorbellAutoCloseAt, setDoorbellAutoCloseAt] = useState(new Date());
@@ -481,6 +472,21 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
     };
     fetch();
     const id = setInterval(fetch, 5 * 60_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [client, config?.weather_entity]);
+
+  // Fetch weather forecast (every 5 min)
+  useEffect(() => {
+    if (!config?.weather_entity) return;
+    let cancelled = false;
+    const fetchForecast = () => {
+      if (!config?.weather_entity) return;
+      client.getWeatherForecast(config.weather_entity)
+        .then((f) => { if (!cancelled) setWeatherForecast(f); })
+        .catch(() => {/* silently ignore */});
+    };
+    fetchForecast();
+    const id = setInterval(fetchForecast, 5 * 60_000);
     return () => { cancelled = true; clearInterval(id); };
   }, [client, config?.weather_entity]);
 
@@ -616,7 +622,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
       {/* Top half: three panels */}
       <div className="h-[45vh] grid grid-cols-3 divide-x divide-white/10 min-h-0">
         <div className="p-5 overflow-hidden min-w-0">
-          <WeatherPanel state={weatherState} />
+          <WeatherPanel state={weatherState} forecast={weatherForecast} />
         </div>
         <div className="p-5 overflow-hidden min-w-0">
           <MusicPanel

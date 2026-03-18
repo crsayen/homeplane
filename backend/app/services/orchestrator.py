@@ -82,6 +82,14 @@ class HomeOrchestrator:
         )
         return [HomeAssistantServiceResult.model_validate(item) for item in result]
 
+    async def get_weather_forecast(self, entity_id: str, forecast_type: str = "daily") -> list[dict]:
+        result = await self._ha_client.call_service_with_response(
+            "weather",
+            "get_forecasts",
+            {"entity_id": entity_id, "type": forecast_type},
+        )
+        return result.get("service_response", result).get(entity_id, {}).get("forecast", [])
+
     async def stream_entity_states(self, entity_ids: set[str]) -> AsyncIterator[EntityStateResponse]:
         async for state in self._ha_client.iter_state_changes(entity_ids):
             yield EntityStateResponse(

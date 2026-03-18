@@ -61,6 +61,14 @@ class HomeAssistantClient:
         payload = response.json()
         return payload if isinstance(payload, list) else [payload]
 
+    async def call_service_with_response(self, domain: str, service: str, data: dict[str, Any]) -> dict[str, Any]:
+        response = await self._client.post(
+            f"/api/services/{domain}/{service}",
+            json={**data, "return_response": True},
+        )
+        self._raise_on_error(response, f"Failed to call service {domain}.{service}")
+        return response.json()
+
     async def iter_state_changes(self, entity_ids: set[str]) -> AsyncIterator[dict[str, Any]]:
         if not entity_ids:
             return

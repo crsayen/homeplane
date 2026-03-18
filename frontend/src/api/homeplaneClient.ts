@@ -62,6 +62,13 @@ export interface KioskConfig {
   doorbell_sensor_entity: string;
 }
 
+export interface WeatherForecastItem {
+  datetime: string;
+  condition: string;
+  temperature: number;
+  templow?: number;
+}
+
 export type MediaPlayerCommand = "play_pause" | "next_track" | "previous_track";
 
 export class HomeplaneClient {
@@ -158,6 +165,12 @@ export class HomeplaneClient {
     return this.request<unknown[]>(`/api/media-player/${entityId}/volume`, {
       method: "POST",
       body: JSON.stringify({ volume }),
+    });
+  }
+
+  async getWeatherForecast(entityId: string): Promise<WeatherForecastItem[]> {
+    return this.request<WeatherForecastItem[]>(`/api/weather/${encodeURIComponent(entityId)}/forecast`, {
+      method: "GET",
     });
   }
 

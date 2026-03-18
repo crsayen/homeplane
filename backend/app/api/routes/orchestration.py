@@ -224,6 +224,20 @@ async def get_gpio_pin_state(
     return GpioPinStateResponse(pin=pin, state=gpio.read_pin(pin))
 
 
+@router.get(
+    "/weather/{entity_id}/forecast",
+    dependencies=[Depends(require_api_key)],
+)
+async def get_weather_forecast(
+    entity_id: str,
+    request: Request,
+    orchestrator: HomeOrchestrator = Depends(get_orchestrator),
+) -> list[dict]:
+    validate_entity_domain(entity_id, "weather")
+    await request.app.state.rate_limiter.check(request)
+    return await orchestrator.get_weather_forecast(entity_id=entity_id)
+
+
 @router.get("/kiosk-config", response_model=KioskConfig, dependencies=[Depends(require_api_key)])
 async def get_kiosk_config(request: Request) -> KioskConfig:
     await request.app.state.rate_limiter.check(request)
