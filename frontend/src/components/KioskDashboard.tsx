@@ -159,17 +159,31 @@ function MusicPanel({
   const artist = mediaState?.attributes.media_artist as string | undefined;
   const albumArt = mediaState?.attributes.entity_picture as string | undefined;
 
-  // Keep showing previous track info during brief transitions (e.g. skipping)
+  // Keep showing previous track info during brief transitions (e.g. skipping).
+  // Times out after 5s so externally-stopped music doesn't show stale info.
   const lastTrackRef = useRef<{ title?: string; artist?: string; albumArt?: string } | null>(null);
+  const [transitionExpired, setTransitionExpired] = useState(false);
   if (isPlaying && title) {
     lastTrackRef.current = { title, artist, albumArt };
   }
-  const displayTrack = isPlaying && title ? { title, artist, albumArt } : lastTrackRef.current;
-  const showPlaying = isPlaying || (mediaState?.state !== "paused" && mediaState?.state !== "off" && lastTrackRef.current !== null);
-  // Clear stale track when definitively stopped
   if (mediaState?.state === "paused" || mediaState?.state === "off") {
     lastTrackRef.current = null;
   }
+  useEffect(() => {
+    if (isPlaying) {
+      setTransitionExpired(false);
+      return;
+    }
+    if (!lastTrackRef.current) return;
+    const timer = window.setTimeout(() => {
+      lastTrackRef.current = null;
+      setTransitionExpired(true);
+    }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [isPlaying, transitionExpired]);
+
+  const displayTrack = isPlaying && title ? { title, artist, albumArt } : lastTrackRef.current;
+  const showPlaying = isPlaying || (displayTrack !== null && !transitionExpired);
 
   const allOn = INDOOR_SWITCHES.every((id) => switchStates.get(id) === "on");
   const someOn = INDOOR_SWITCHES.some((id) => switchStates.get(id) === "on");
