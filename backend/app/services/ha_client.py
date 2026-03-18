@@ -41,6 +41,60 @@ class HomeAssistantClient:
         self._raise_on_error(response, "Failed to fetch entity state")
         return response.json()
 
+    async def webrtc_offer(self, entity_id: str, sdp_offer: str) -> dict[str, Any]:
+        """Send a WebRTC SDP offer to HA and return the answer + session_id."""
+        import websockets as ws_lib
+
+        ws_url = self._build_ws_url()
+        token = self._client.headers["Authorization"].split(" ", 1)[1]
+        async with ws_lib.connect(ws_url, max_size=2**20) as websocket:
+            await websocket.recv()  # auth_required
+            await websocket.send(json.dumps({"type": "auth", "access_token": token}))
+            auth_result = json.loads(await websocket.recv())
+            if auth_result.get("type") != "auth_ok":
+                raise HTTPException(status_code=502, detail="HA websocket auth failed")
+
+            await websocket.send(json.dumps({
+                "id": 1,
+                "type": "camera/webrtc/offer",
+                "entity_id": entity_id,
+                "offer": sdp_offer,
+            }))
+
+            session_id = None
+            answer_sdp = None
+            candidates: list[dict] = []
+
+            import asyncio as _asyncio
+            # Collect session, answer, and candidates
+            for _ in range(20):
+                try:
+                    msg = json.loads(await _asyncio.wait_for(websocket.recv(), timeout=10))
+                except _asyncio.TimeoutError:
+                    break
+
+                if msg.get("type") == "result" and not msg.get("success"):
+                    error = msg.get("error", {})
+                    raise HTTPException(status_code=502, detail=error.get("message", "WebRTC offer failed"))
+
+                if msg.get("type") == "event":
+                    event = msg.get("event", {})
+                    evt_type = event.get("type")
+                    if evt_type == "session":
+                        session_id = event.get("session_id")
+                    elif evt_type == "answer":
+                        answer_sdp = event.get("answer")
+                        break  # got what we need
+                    elif evt_type == "candidate":
+                        candidates.append(event.get("candidate", {}))
+                    elif evt_type == "error":
+                        raise HTTPException(status_code=502, detail=event.get("message", "WebRTC error"))
+
+            if not answer_sdp:
+                raise HTTPException(status_code=502, detail="No WebRTC answer received")
+
+            return {"answer": answer_sdp, "session_id": session_id, "candidates": candidates}
+
     async def get_camera_hls_stream(self, entity_id: str) -> str:
         """Request an HLS stream URL from HA via WebSocket."""
         import websockets as ws_lib

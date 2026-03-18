@@ -199,6 +199,13 @@ export class HomeplaneClient {
     return `${this.baseUrl}/api/media-player/${encodeURIComponent(entityId)}/image?api_key=${encodeURIComponent(this.apiKey)}`;
   }
 
+  async webrtcOffer(entityId: string, offer: string): Promise<{ answer: string; session_id: string; candidates: Array<{ candidate: string; sdpMLineIndex: number }> }> {
+    return this.request(`/api/camera/${encodeURIComponent(entityId)}/webrtc/offer`, {
+      method: "POST",
+      body: JSON.stringify({ offer }),
+    });
+  }
+
   async getCameraHlsUrl(entityId: string): Promise<string> {
     const result = await this.request<{ url: string }>(`/api/camera/${encodeURIComponent(entityId)}/hls`, {
       method: "GET",

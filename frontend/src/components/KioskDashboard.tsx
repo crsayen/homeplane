@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import Hls from "hls.js";
-
 import { EntityStateResponse, HomeplaneClient, KioskConfig, WeatherForecastItem } from "../api/homeplaneClient";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -392,11 +390,10 @@ function DoorbellOverlay({
   onDismiss: () => void;
 }) {
   const [secondsLeft, setSecondsLeft] = useState(30);
-  const [hlsUrl, setHlsUrl] = useState<string | null>(null);
-  const [hlsFailed, setHlsFailed] = useState(false);
+  const [videoFailed, setVideoFailed] = useState(false);
   const [snapshotTs, setSnapshotTs] = useState(Date.now());
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const hlsRef = useRef<Hls | null>(null);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
 
   const camEntity = config.doorbell_camera_entity;
 
@@ -410,53 +407,59 @@ function DoorbellOverlay({
     return () => clearInterval(id);
   }, [autoCloseAt, onDismiss]);
 
-  // Request HLS stream URL
+  // WebRTC connection
   useEffect(() => {
-    if (!camEntity) return;
-    client.getCameraHlsUrl(camEntity)
-      .then(setHlsUrl)
-      .catch(() => setHlsFailed(true));
+    if (!camEntity || !videoRef.current) return;
+    let cancelled = false;
+
+    const startWebRTC = async () => {
+      try {
+        const pc = new RTCPeerConnection({ iceServers: [] });
+        pcRef.current = pc;
+
+        // We only receive video
+        pc.addTransceiver("video", { direction: "recvonly" });
+
+        pc.ontrack = (event) => {
+          if (videoRef.current) videoRef.current.srcObject = event.streams[0];
+        };
+        pc.oniceconnectionstatechange = () => {
+          if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "disconnected") {
+            if (!cancelled) setVideoFailed(true);
+          }
+        };
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        const result = await client.webrtcOffer(camEntity, offer.sdp!);
+
+        if (cancelled) { pc.close(); return; }
+
+        await pc.setRemoteDescription({ type: "answer", sdp: result.answer });
+
+        for (const c of result.candidates) {
+          await pc.addIceCandidate(c);
+        }
+      } catch {
+        if (!cancelled) setVideoFailed(true);
+      }
+    };
+
+    startWebRTC();
+    return () => {
+      cancelled = true;
+      pcRef.current?.close();
+      pcRef.current = null;
+    };
   }, [client, camEntity]);
 
-  // Attach HLS.js to video element
+  // Fallback snapshot refresh (every 1s) when WebRTC fails
   useEffect(() => {
-    if (!hlsUrl || !videoRef.current) return;
-    if (!Hls.isSupported()) {
-      // Safari has native HLS — try direct
-      videoRef.current.src = hlsUrl;
-      videoRef.current.play().catch(() => setHlsFailed(true));
-      return;
-    }
-    const hls = new Hls({
-      liveDurationInfinity: true,
-      liveBackBufferLength: 0,
-      manifestLoadingMaxRetry: 5,
-      manifestLoadingRetryDelay: 2000,
-      levelLoadingMaxRetry: 5,
-      levelLoadingRetryDelay: 2000,
-      fragLoadingMaxRetry: 5,
-    });
-    hlsRef.current = hls;
-    hls.loadSource(hlsUrl);
-    hls.attachMedia(videoRef.current);
-    hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      videoRef.current?.play().catch(() => {});
-    });
-    hls.on(Hls.Events.ERROR, (_event, data) => {
-      if (data.fatal) setHlsFailed(true);
-    });
-    return () => {
-      hls.destroy();
-      hlsRef.current = null;
-    };
-  }, [hlsUrl]);
-
-  // Fallback snapshot refresh (every 1s) when HLS fails
-  useEffect(() => {
-    if (!hlsFailed) return;
+    if (!videoFailed) return;
     const id = setInterval(() => setSnapshotTs(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [hlsFailed]);
+  }, [videoFailed]);
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
@@ -482,7 +485,7 @@ function DoorbellOverlay({
       <div className="flex-1 flex items-center justify-center overflow-hidden bg-black">
         {!camEntity ? (
           <div className="text-white/30 text-[2vw]">No doorbell camera configured</div>
-        ) : hlsFailed ? (
+        ) : videoFailed ? (
           <img
             key={snapshotTs}
             src={`${client.getCameraSnapshotUrl(camEntity)}&t=${snapshotTs}`}

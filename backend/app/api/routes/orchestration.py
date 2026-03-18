@@ -310,6 +310,18 @@ async def get_media_player_image(entity_id: str, request: Request) -> Response:
     )
 
 
+@router.post("/camera/{entity_id}/webrtc/offer", dependencies=[Depends(require_api_key)])
+async def webrtc_offer(entity_id: str, request: Request) -> dict:
+    validate_entity_domain(entity_id, "camera")
+    await request.app.state.rate_limiter.check(request)
+    body = await request.json()
+    offer = body.get("offer", "")
+    if not offer:
+        raise HTTPException(status_code=400, detail="Missing 'offer' in request body")
+    ha_client: HomeAssistantClient = request.app.state.ha_client
+    return await ha_client.webrtc_offer(entity_id, offer)
+
+
 @router.get("/camera/{entity_id}/hls", dependencies=[Depends(require_api_key)])
 async def get_camera_hls(entity_id: str, request: Request) -> dict:
     validate_entity_domain(entity_id, "camera")
