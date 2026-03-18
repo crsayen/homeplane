@@ -27,10 +27,8 @@ function weatherEmoji(condition: string): string {
   const map: Record<string, string> = {
     "sunny": "☀️",
     "clear-night": "🌙",
-    "partly-cloudy-day": "⛅",
-    "partly-cloudy-night": "🌤️",
+    "partlycloudy": "⛅",
     "cloudy": "☁️",
-    "overcast": "☁️",
     "rainy": "🌧️",
     "pouring": "🌧️",
     "snowy": "❄️",
@@ -44,7 +42,7 @@ function weatherEmoji(condition: string): string {
     "exceptional": "❗",
     "tornado": "🌪️",
   };
-  return map[condition.toLowerCase()] ?? "🌡️";
+  return map[condition.toLowerCase()] ?? "☁️";
 }
 
 function toWsUrl(apiBaseUrl: string): string {
@@ -76,12 +74,12 @@ function WeatherPanel({ state, forecast }: { state: EntityStateResponse | null; 
 
       {/* Current */}
       <div className="flex items-center gap-3">
-        <span className="text-[3.5vw] leading-none">{weatherEmoji(state.state)}</span>
+        <span className="text-[5vw] leading-none">{weatherEmoji(state.state)}</span>
         <div>
-          <div className="text-[4vw] font-bold leading-none text-white tabular-nums">
+          <div className="text-[5.5vw] font-bold leading-none text-white tabular-nums">
             {temp !== undefined ? `${Math.round(temp)}${unit}` : "--"}
           </div>
-          <div className="text-[1vw] text-white/40 capitalize mt-1">
+          <div className="text-[1.2vw] text-white/40 capitalize mt-1">
             {state.state.replace(/-/g, " ")}
           </div>
         </div>
