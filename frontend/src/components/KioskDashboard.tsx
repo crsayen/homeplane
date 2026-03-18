@@ -276,15 +276,6 @@ function MusicPanel({
 
       {/* Controls */}
       <div className="flex flex-col gap-2">
-        {/* Rooms button */}
-        <button
-          type="button"
-          onClick={onOpenRooms}
-          className="flex items-center justify-center gap-1.5 py-1 rounded-lg transition text-[0.85vw] font-medium bg-white/5 text-white/40 active:bg-white/10"
-        >
-          🎛 Rooms
-        </button>
-
         {/* Volume */}
         <div className={`flex items-center gap-2 ${!(isPlaying || someOn) ? "opacity-25 pointer-events-none" : ""}`}>
           <span className="text-[0.9vw] text-white/20">🔈</span>
@@ -310,25 +301,35 @@ function MusicPanel({
 
         <div className="h-2" />
 
-        <button
-          type="button"
-          onClick={buttonAction}
-          disabled={pending}
-          className={`flex items-center justify-center gap-2 py-2 px-4 rounded-lg transition text-[1.1vw] font-semibold ${
-            pending
-              ? "bg-white/5 text-white/30 cursor-wait"
-              : showPlaying
-                ? "bg-white/10 text-white/70 hover:bg-white/15"
-                : "bg-white/10 text-white hover:bg-white/20"
-          }`}
-        >
-          {pending ? (
-            <span className="text-[1.4vw] animate-spin">⟳</span>
-          ) : (
-            <span className="text-[1.4vw]">{buttonIcon}</span>
-          )}
-          {pending ? "Starting…" : buttonLabel}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={buttonAction}
+            disabled={pending}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-lg transition text-[1.1vw] font-semibold ${
+              pending
+                ? "bg-white/5 text-white/30 cursor-wait"
+                : showPlaying
+                  ? "bg-white/10 text-white/70 hover:bg-white/15"
+                  : "bg-white/10 text-white hover:bg-white/20"
+            }`}
+          >
+            {pending ? (
+              <span className="text-[1.4vw] animate-spin">⟳</span>
+            ) : (
+              <span className="text-[1.4vw]">{buttonIcon}</span>
+            )}
+            {pending ? "Starting…" : buttonLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onOpenRooms}
+            className="px-2 rounded-lg bg-white/5 text-white/30 text-[1.2vw] active:bg-white/10 transition"
+            title="Room controls"
+          >
+            ⋯
+          </button>
+        </div>
 
         {/* Stop button when playing everywhere (so user can still stop) */}
         {showPlaying && !allOn && (
@@ -916,7 +917,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
             </button>
           </div>
           <iframe
-            src="/audio"
+            src="/dashboards/audio"
             className="flex-1 w-full border-none"
             title="Room Controls"
           />
