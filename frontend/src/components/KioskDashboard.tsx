@@ -393,8 +393,7 @@ function DoorbellOverlay({
   const [videoFailed, setVideoFailed] = useState(false);
   const [snapshotTs, setSnapshotTs] = useState(Date.now());
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const wsRef2 = useRef<WebSocket | null>(null);
-  const msRef = useRef<MediaSource | null>(null);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
 
   const camEntity = config.doorbell_camera_entity;
 
@@ -408,90 +407,59 @@ function DoorbellOverlay({
     return () => clearInterval(id);
   }, [autoCloseAt, onDismiss]);
 
-  // go2rtc MSE stream via WebSocket
+  // go2rtc WebRTC via Caddy
   useEffect(() => {
     if (!camEntity || !videoRef.current) return;
     let cancelled = false;
 
-    const startMSE = () => {
-      const video = videoRef.current!;
-      const ms = new MediaSource();
-      msRef.current = ms;
-      video.src = URL.createObjectURL(ms);
+    const startWebRTC = async () => {
+      try {
+        const pc = new RTCPeerConnection({ iceServers: [] });
+        pcRef.current = pc;
 
-      ms.addEventListener("sourceopen", () => {
-        // Connect to go2rtc via Caddy (must be wss:// since page is https://)
-        const loc = window.location;
-        const wsProto = loc.protocol === "https:" ? "wss:" : "ws:";
-        const wsUrl = `${wsProto}//${loc.host}/go2rtc/api/ws?src=doorbell`;
-        const ws = new WebSocket(wsUrl);
-        wsRef2.current = ws;
-        ws.binaryType = "arraybuffer";
+        pc.addTransceiver("video", { direction: "recvonly" });
+        pc.addTransceiver("audio", { direction: "recvonly" });
 
-        let sourceBuffer: SourceBuffer | null = null;
-        const queue: ArrayBuffer[] = [];
-        let appending = false;
-
-        const appendNext = () => {
-          if (!sourceBuffer || appending || queue.length === 0) return;
-          if (ms.readyState !== "open") return;
-          appending = true;
-          sourceBuffer.appendBuffer(queue.shift()!);
-        };
-
-        ws.onmessage = (event) => {
-          if (typeof event.data === "string") {
-            // First message is the codec info (e.g. "mse" or JSON with codecs)
-            try {
-              const msg = JSON.parse(event.data);
-              if (msg.type === "mse" && msg.codecs) {
-                const mimeType = `video/mp4; codecs="${msg.codecs}"`;
-                if (MediaSource.isTypeSupported(mimeType)) {
-                  sourceBuffer = ms.addSourceBuffer(mimeType);
-                  sourceBuffer.mode = "segments";
-                  sourceBuffer.addEventListener("updateend", () => {
-                    appending = false;
-                    appendNext();
-                    // Keep latency low by trimming buffer
-                    if (sourceBuffer && !sourceBuffer.updating && video.buffered.length > 0) {
-                      const end = video.buffered.end(video.buffered.length - 1);
-                      if (end - video.currentTime > 2) {
-                        video.currentTime = end - 0.5;
-                      }
-                    }
-                  });
-                }
-              }
-            } catch {
-              // ignore non-JSON text messages
-            }
-            return;
+        pc.ontrack = (event) => {
+          if (videoRef.current && event.streams[0]) {
+            videoRef.current.srcObject = event.streams[0];
           }
-          // Binary data — MP4 fragment
-          queue.push(event.data as ArrayBuffer);
-          appendNext();
+        };
+        pc.oniceconnectionstatechange = () => {
+          const s = pc.iceConnectionState;
+          if (s === "failed" || s === "disconnected" || s === "closed") {
+            if (!cancelled) setVideoFailed(true);
+          }
         };
 
-        ws.onerror = () => { if (!cancelled) setVideoFailed(true); };
-        ws.onclose = () => { if (!cancelled) setVideoFailed(true); };
-      });
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
 
-      video.play().catch(() => {});
+        // Send offer to go2rtc's HTTP API via Caddy
+        const resp = await fetch(`/go2rtc/api/webrtc?src=doorbell`, {
+          method: "POST",
+          body: offer.sdp,
+        });
+        if (!resp.ok) throw new Error(`go2rtc returned ${resp.status}`);
+        const answerSdp = await resp.text();
+
+        if (cancelled) { pc.close(); return; }
+
+        await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
+      } catch {
+        if (!cancelled) setVideoFailed(true);
+      }
     };
 
-    startMSE();
+    startWebRTC();
     return () => {
       cancelled = true;
-      wsRef2.current?.close();
-      wsRef2.current = null;
-      if (msRef.current?.readyState === "open") {
-        try { msRef.current.endOfStream(); } catch { /* ignore */ }
-      }
-      msRef.current = null;
+      pcRef.current?.close();
+      pcRef.current = null;
     };
   }, [camEntity]);
 
-  // Fallback snapshot refresh (every 1s) when stream fails
+  // Fallback snapshot refresh (every 1s) when WebRTC fails
   useEffect(() => {
     if (!videoFailed) return;
     const id = setInterval(() => setSnapshotTs(Date.now()), 1000);
