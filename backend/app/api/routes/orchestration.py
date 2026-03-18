@@ -335,13 +335,25 @@ async def ha_proxy(path: str, request: Request) -> Response:
     if content_type and "mpegurl" in content_type:
         api_key = request.query_params.get("api_key", "")
         base_path = path.rsplit("/", 1)[0]
+
+        def _rewrite_uri(rel: str) -> str:
+            clean = rel.lstrip("./")
+            abs_path = base_path + "/" + clean
+            return f"/api/ha-proxy?path={abs_path}&api_key={api_key}"
+
         text = content.decode()
         lines = []
         for line in text.splitlines():
             if line and not line.startswith("#"):
-                # Relative URL — make it absolute through our proxy
-                abs_path = base_path + "/" + line
-                line = f"/api/ha-proxy?path={abs_path}&api_key={api_key}"
+                # Bare relative URL line (e.g. playlist.m3u8)
+                line = _rewrite_uri(line)
+            elif "URI=" in line:
+                # Rewrite URI="..." attributes in #EXT tags
+                line = re.sub(
+                    r'URI="([^"]+)"',
+                    lambda m: f'URI="{_rewrite_uri(m.group(1))}"',
+                    line,
+                )
             lines.append(line)
         content = "\n".join(lines).encode()
 
