@@ -863,7 +863,10 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
           />
         </div>
         <div className="p-5 overflow-hidden min-w-0">
-          <CamerasPanel config={config} camTimestamp={camTimestamp} client={client} />
+          {doorbellActive
+            ? <div className="h-full flex items-center justify-center text-white/10 text-sm">Live view active</div>
+            : <CamerasPanel config={config} camTimestamp={camTimestamp} client={client} />
+          }
         </div>
       </div>
 
