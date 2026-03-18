@@ -588,7 +588,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
   };
 
   const handleStopMusic = () => {
-    client.runScript("script.turn_off_music_everywhere").catch(() => {});
+    client.runScript("script.stop_music_indoor").catch(() => {});
   };
 
   const handleToggleSpeakers = () => {
