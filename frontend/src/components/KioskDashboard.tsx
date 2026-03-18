@@ -182,7 +182,7 @@ function MusicPanel({
 
       {/* Track info */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        {isPlaying && (title ?? artist) ? (
+        {(title ?? artist) ? (
           <div className="flex gap-3 items-start">
             {albumArt && (
               <img
