@@ -39,12 +39,14 @@ function DashboardIndex({
         <div className="hp-index-grid mt-6 grid gap-3 sm:grid-cols-2">
           <a
             href="/dashboards/audio"
+            onClick={(e) => { e.preventDefault(); history.pushState(null, "", "/dashboards/audio"); dispatchEvent(new PopStateEvent("popstate")); }}
             className="rounded-xl border border-slate-300/70 bg-white/80 p-4 text-sm font-semibold text-slate-900 transition hover:border-cyan-400 dark:border-white/15 dark:bg-black/60 dark:text-slate-100"
           >
             Multi-Room Audio
           </a>
           <a
             href="/dashboards/lighting"
+            onClick={(e) => { e.preventDefault(); history.pushState(null, "", "/dashboards/lighting"); dispatchEvent(new PopStateEvent("popstate")); }}
             className="rounded-xl border border-slate-300/70 bg-white/80 p-4 text-sm font-semibold text-slate-900 transition hover:border-cyan-400 dark:border-white/15 dark:bg-black/60 dark:text-slate-100"
           >
             Lighting

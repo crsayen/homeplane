@@ -6,6 +6,17 @@
     <title>Homeplane Multi-Room Audio</title>
   </head>
   <body>
+    <script>
+      // Apply dark mode before React loads to prevent white flash
+      (function() {
+        var theme = localStorage.getItem('homeplane-theme') || 'system';
+        var isDark = theme === 'dark' || (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+          document.documentElement.style.background = '#050505';
+        }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
