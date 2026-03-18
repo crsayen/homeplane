@@ -129,6 +129,7 @@ function MusicPanel({
   onPlayMusic,
   onStopMusic,
   onPlayEverywhere,
+  onSkip,
   onVolumeCommit,
 }: {
   mediaState: EntityStateResponse | null;
@@ -138,6 +139,7 @@ function MusicPanel({
   onPlayMusic: () => void;
   onStopMusic: () => void;
   onPlayEverywhere: () => void;
+  onSkip: () => void;
   onVolumeCommit: (vol: number) => void;
 }) {
   const [localVolume, setLocalVolume] = useState<number | null>(null);
@@ -204,6 +206,20 @@ function MusicPanel({
           </div>
         ) : (
           <div className="text-[1vw] text-white/20">Idle</div>
+        )}
+
+        {/* Shuffle / next */}
+        {isPlaying && (
+          <div className="flex-1 flex items-center justify-center">
+            <button
+              type="button"
+              onClick={onSkip}
+              className="text-[3vw] text-white/20 hover:text-white/60 active:scale-90 transition"
+              title="Next song"
+            >
+              🎲
+            </button>
+          </div>
         )}
       </div>
 
@@ -683,6 +699,11 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
     client.runScript("script.stop_music_indoor").catch(() => {});
   };
 
+  const handleSkip = () => {
+    if (!config?.media_player_entity) return;
+    client.mediaPlayerCommand(config.media_player_entity, "next_track").catch(() => {});
+  };
+
   const handlePlayEverywhere = () => {
     setMusicPending(true);
     client.runScript("script.indoor_speakers_on").catch(() => {});
@@ -756,6 +777,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
             onPlayMusic={handlePlayMusic}
             onStopMusic={handleStopMusic}
             onPlayEverywhere={handlePlayEverywhere}
+            onSkip={handleSkip}
             onVolumeCommit={handleVolumeCommit}
           />
         </div>
