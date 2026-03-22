@@ -422,75 +422,53 @@ const CamerasPanel = memo(function CamerasPanel({
   );
 });
 
-function DoorbellOverlay({
-  config,
-  client,
-  autoCloseAt,
-  onDismiss,
-}: {
-  config: KioskConfig;
-  client: HomeplaneClient;
-  autoCloseAt: Date;
-  onDismiss: () => void;
-}) {
-  const [secondsLeft, setSecondsLeft] = useState(30);
-  const [videoFailed, setVideoFailed] = useState(false);
-  const [snapshotTs, setSnapshotTs] = useState(Date.now());
+// Persistent WebRTC connection to go2rtc — stays alive so doorbell video is instant
+function useDoorbellStream() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
+  const [failed, setFailed] = useState(false);
+  const reconnectTimer = useRef<number | null>(null);
 
-  const camEntity = config.doorbell_camera_entity;
+  const connect = useCallback(() => {
+    // Clean up previous connection
+    pcRef.current?.close();
+    pcRef.current = null;
+    setFailed(false);
 
-  // Countdown + auto-dismiss
-  useEffect(() => {
-    const id = setInterval(() => {
-      const remaining = Math.max(0, Math.round((autoCloseAt.getTime() - Date.now()) / 1000));
-      setSecondsLeft(remaining);
-      if (remaining === 0) onDismiss();
-    }, 500);
-    return () => clearInterval(id);
-  }, [autoCloseAt, onDismiss]);
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    });
+    pcRef.current = pc;
 
-  // go2rtc WebRTC via Caddy
-  useEffect(() => {
-    if (!camEntity || !videoRef.current) return;
-    let cancelled = false;
+    pc.addTransceiver("video", { direction: "recvonly" });
+    pc.addTransceiver("audio", { direction: "recvonly" });
 
-    const startWebRTC = async () => {
+    pc.ontrack = (event) => {
+      if (videoRef.current && event.streams[0]) {
+        videoRef.current.srcObject = event.streams[0];
+        videoRef.current.play().catch(() => {});
+      }
+    };
+    pc.oniceconnectionstatechange = () => {
+      const s = pc.iceConnectionState;
+      if (s === "failed" || s === "disconnected" || s === "closed") {
+        setFailed(true);
+        // Auto-reconnect after 10s
+        if (reconnectTimer.current !== null) window.clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = window.setTimeout(() => connect(), 10_000);
+      }
+    };
+
+    (async () => {
       try {
-        const pc = new RTCPeerConnection({
-          iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-        });
-        pcRef.current = pc;
-
-        pc.addTransceiver("video", { direction: "recvonly" });
-        pc.addTransceiver("audio", { direction: "recvonly" });
-
-        pc.ontrack = (event) => {
-          if (videoRef.current && event.streams[0]) {
-            videoRef.current.srcObject = event.streams[0];
-            videoRef.current.play().catch(() => {});
-          }
-        };
-        pc.oniceconnectionstatechange = () => {
-          const s = pc.iceConnectionState;
-          if (s === "failed" || s === "disconnected" || s === "closed") {
-            if (!cancelled) setVideoFailed(true);
-          }
-        };
-
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
-        // Wait for ICE gathering to complete (with timeout)
         if (pc.iceGatheringState !== "complete") {
           await new Promise<void>((resolve) => {
             const timer = setTimeout(resolve, 3000);
             const check = () => {
-              if (pc.iceGatheringState === "complete") {
-                clearTimeout(timer);
-                resolve();
-              }
+              if (pc.iceGatheringState === "complete") { clearTimeout(timer); resolve(); }
             };
             pc.addEventListener("icegatheringstatechange", check);
             check();
@@ -501,24 +479,53 @@ function DoorbellOverlay({
           method: "POST",
           body: pc.localDescription!.sdp,
         });
-        if (!resp.ok) throw new Error(`go2rtc returned ${resp.status}`);
-        const answerSdp = await resp.text();
-
-        if (cancelled) { pc.close(); return; }
-
-        await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
+        if (!resp.ok) throw new Error(`go2rtc ${resp.status}`);
+        await pc.setRemoteDescription({ type: "answer", sdp: await resp.text() });
       } catch {
-        if (!cancelled) setVideoFailed(true);
+        setFailed(true);
+        if (reconnectTimer.current !== null) window.clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = window.setTimeout(() => connect(), 10_000);
       }
-    };
+    })();
+  }, []);
 
-    startWebRTC();
+  useEffect(() => {
+    connect();
     return () => {
-      cancelled = true;
       pcRef.current?.close();
       pcRef.current = null;
+      if (reconnectTimer.current !== null) window.clearTimeout(reconnectTimer.current);
     };
-  }, [camEntity]);
+  }, [connect]);
+
+  return { videoRef, failed };
+}
+
+function DoorbellOverlay({
+  client,
+  camEntity,
+  videoFailed,
+  autoCloseAt,
+  onDismiss,
+}: {
+  client: HomeplaneClient;
+  camEntity: string;
+  videoFailed: boolean;
+  autoCloseAt: Date;
+  onDismiss: () => void;
+}) {
+  const [secondsLeft, setSecondsLeft] = useState(30);
+  const [snapshotTs, setSnapshotTs] = useState(Date.now());
+
+  // Countdown + auto-dismiss
+  useEffect(() => {
+    const id = setInterval(() => {
+      const remaining = Math.max(0, Math.round((autoCloseAt.getTime() - Date.now()) / 1000));
+      setSecondsLeft(remaining);
+      if (remaining === 0) onDismiss();
+    }, 500);
+    return () => clearInterval(id);
+  }, [autoCloseAt, onDismiss]);
 
   // Fallback snapshot refresh (every 1s) when WebRTC fails
   useEffect(() => {
@@ -547,27 +554,18 @@ function DoorbellOverlay({
         </div>
       </div>
 
-      {/* Camera feed */}
-      <div className="flex-1 flex items-center justify-center overflow-hidden bg-black">
-        {!camEntity ? (
-          <div className="text-white/30 text-[2vw]">No doorbell camera configured</div>
-        ) : videoFailed ? (
+      {/* Camera feed — video element is persistent in parent, shown via CSS.
+           Only render fallback snapshots here if WebRTC failed. */}
+      {videoFailed && camEntity && (
+        <div className="flex-1 flex items-center justify-center overflow-hidden bg-black">
           <img
             key={snapshotTs}
             src={`${client.getCameraSnapshotUrl(camEntity)}&t=${snapshotTs}`}
             alt="Doorbell"
             className="max-w-full max-h-full object-contain"
           />
-        ) : (
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            className="max-w-full max-h-full object-contain"
-          />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -907,6 +905,9 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
 
   const handleOpenRooms = useCallback(() => setRoomsOpen(true), []);
 
+  // Persistent WebRTC stream for doorbell — always connected so video is instant
+  const doorbellStream = useDoorbellStream();
+
   const handleSaveConfig = () => {
     setConfigSaveError(null);
     setConfigSaving(true);
@@ -924,11 +925,22 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
 
   return (
     <div className="h-screen w-screen overflow-hidden flex flex-col bg-[#0a0a0a] text-white">
+      {/* Persistent doorbell video element — always in DOM, hidden when not active */}
+      <video
+        ref={doorbellStream.videoRef}
+        autoPlay
+        muted
+        playsInline
+        className={`fixed inset-0 z-50 w-full h-full object-contain bg-black ${doorbellActive ? "" : "hidden"}`}
+        style={{ top: "48px" }}
+      />
+
       {/* Doorbell takeover */}
       {doorbellActive && config && (
         <DoorbellOverlay
-          config={config}
           client={client}
+          camEntity={config.doorbell_camera_entity}
+          videoFailed={doorbellStream.failed}
           autoCloseAt={doorbellAutoCloseAt}
           onDismiss={() => setDoorbellActive(false)}
         />
