@@ -422,23 +422,26 @@ const CamerasPanel = memo(function CamerasPanel({
   );
 });
 
-// On-demand WebRTC connection to go2rtc — connects when doorbell rings, disconnects when dismissed.
-// No persistent RTSP connection that the camera can drop.
-function useDoorbellStream(active: boolean) {
+// Always-on WebRTC connection to go2rtc with health monitoring.
+// Stays connected so doorbell video is instant. Reconnects automatically
+// if the stream stalls or the camera drops the RTSP connection.
+function useDoorbellStream() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const [failed, setFailed] = useState(false);
   const retryTimer = useRef<number | null>(null);
+  const healthTimer = useRef<number | null>(null);
+  const lastFrameCount = useRef<number>(0);
+  const staleChecks = useRef<number>(0);
 
-  const disconnect = useCallback(() => {
+  const connect = useCallback(() => {
+    // Clean up previous
     if (retryTimer.current !== null) { window.clearTimeout(retryTimer.current); retryTimer.current = null; }
     pcRef.current?.close();
     pcRef.current = null;
-  }, []);
-
-  const connect = useCallback(() => {
-    disconnect();
     setFailed(false);
+    lastFrameCount.current = 0;
+    staleChecks.current = 0;
 
     const pc = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -458,8 +461,7 @@ function useDoorbellStream(active: boolean) {
       const s = pc.iceConnectionState;
       if (s === "failed" || s === "disconnected" || s === "closed") {
         setFailed(true);
-        // Retry after 2s if still active
-        retryTimer.current = window.setTimeout(() => connect(), 2_000);
+        retryTimer.current = window.setTimeout(() => connect(), 5_000);
       }
     };
 
@@ -468,7 +470,6 @@ function useDoorbellStream(active: boolean) {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
-        // Wait for ICE gathering (STUN needs a round-trip)
         if (pc.iceGatheringState !== "complete") {
           await new Promise<void>((resolve) => {
             const timer = setTimeout(resolve, 3000);
@@ -488,20 +489,61 @@ function useDoorbellStream(active: boolean) {
         await pc.setRemoteDescription({ type: "answer", sdp: await resp.text() });
       } catch {
         setFailed(true);
-        retryTimer.current = window.setTimeout(() => connect(), 2_000);
+        retryTimer.current = window.setTimeout(() => connect(), 5_000);
       }
     })();
-  }, [disconnect]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // Health check every 15s — detect stale streams and reconnect
   useEffect(() => {
-    if (active) {
-      connect();
-    } else {
-      disconnect();
-      setFailed(false);
-    }
-    return () => disconnect();
-  }, [active, connect, disconnect]);
+    healthTimer.current = window.setInterval(async () => {
+      const pc = pcRef.current;
+      if (!pc) return;
+
+      // If not connected yet, skip
+      if (pc.iceConnectionState !== "connected") return;
+
+      try {
+        const stats = await pc.getStats();
+        let currentFrames = 0;
+        stats.forEach((report) => {
+          if (report.type === "inbound-rtp" && report.kind === "video") {
+            currentFrames = report.framesReceived ?? 0;
+          }
+        });
+
+        if (currentFrames === lastFrameCount.current) {
+          staleChecks.current++;
+          // 3 checks with no new frames (45s) = stale, reconnect
+          if (staleChecks.current >= 3) {
+            console.warn("[doorbell] Stream stale, reconnecting");
+            connect();
+          }
+        } else {
+          staleChecks.current = 0;
+          if (failed) setFailed(false);
+          lastFrameCount.current = currentFrames;
+        }
+      } catch {
+        // getStats can fail if connection is closing
+      }
+    }, 15_000);
+
+    return () => {
+      if (healthTimer.current !== null) window.clearInterval(healthTimer.current);
+    };
+  }, [connect, failed]);
+
+  // Connect on mount
+  useEffect(() => {
+    connect();
+    return () => {
+      pcRef.current?.close();
+      pcRef.current = null;
+      if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
+    };
+  }, [connect]);
 
   return { videoRef, failed };
 }
@@ -910,8 +952,8 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
 
   const handleOpenRooms = useCallback(() => setRoomsOpen(true), []);
 
-  // On-demand WebRTC stream for doorbell — connects when active, disconnects when dismissed
-  const doorbellStream = useDoorbellStream(doorbellActive);
+  // Always-on WebRTC stream for doorbell — instant video when doorbell rings
+  const doorbellStream = useDoorbellStream();
 
   const handleSaveConfig = () => {
     setConfigSaveError(null);
