@@ -206,15 +206,15 @@ function MusicPanel({
   let buttonAction: () => void;
   if (!showPlaying) {
     buttonLabel = "Play Music";
-    buttonIcon = "▶";
+    buttonIcon = "play";
     buttonAction = onPlayMusic;
   } else if (!allOn) {
     buttonLabel = "Play Everywhere";
-    buttonIcon = "🔊";
+    buttonIcon = "speaker";
     buttonAction = onPlayEverywhere;
   } else {
     buttonLabel = "Stop Music";
-    buttonIcon = "⏹";
+    buttonIcon = "stop";
     buttonAction = onStopMusic;
   }
 
@@ -228,23 +228,27 @@ function MusicPanel({
           <button
             type="button"
             onClick={onPrevious}
-            className="text-[2.5vw] text-white/50 active:scale-90 transition-transform"
+            className="text-white/50 active:scale-90 transition-transform"
           >
-            ⏮
+            <svg width="3vw" height="3vw" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
           </button>
           <button
             type="button"
             onClick={onPlayPause}
-            className="text-[3.5vw] text-white active:scale-90 transition-transform"
+            className="text-white active:scale-90 transition-transform"
           >
-            {isPlaying ? "⏸" : "▶"}
+            {isPlaying ? (
+              <svg width="4vw" height="4vw" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
+            ) : (
+              <svg width="4vw" height="4vw" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            )}
           </button>
           <button
             type="button"
             onClick={onSkip}
-            className="text-[2.5vw] text-white/50 active:scale-90 transition-transform"
+            className="text-white/50 active:scale-90 transition-transform"
           >
-            ⏭
+            <svg width="3vw" height="3vw" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm10 0h2V6h-2v12z"/></svg>
           </button>
         </div>
       )}
@@ -278,7 +282,7 @@ function MusicPanel({
       <div className="flex flex-col gap-2">
         {/* Volume */}
         <div className={`flex items-center gap-2 ${!(isPlaying || someOn) ? "opacity-25 pointer-events-none" : ""}`}>
-          <span className="text-[0.9vw] text-white/20">🔈</span>
+          <svg className="text-white/20 shrink-0" width="0.9vw" height="0.9vw" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
           <input
             type="range"
             min={0}
@@ -315,19 +319,23 @@ function MusicPanel({
             }`}
           >
             {pending ? (
-              <span className="text-[1.4vw] animate-spin">⟳</span>
+              <svg className="animate-spin" width="1.4vw" height="1.4vw" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>
+            ) : buttonIcon === "play" ? (
+              <svg width="1.4vw" height="1.4vw" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            ) : buttonIcon === "stop" ? (
+              <svg width="1.4vw" height="1.4vw" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
             ) : (
-              <span className="text-[1.4vw]">{buttonIcon}</span>
+              <svg width="1.4vw" height="1.4vw" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
             )}
-            {pending ? "Starting…" : buttonLabel}
+            {pending ? "Starting\u2026" : buttonLabel}
           </button>
           <button
             type="button"
             onClick={onOpenRooms}
-            className="px-2 rounded-lg bg-white/5 text-white/30 text-[1.2vw] active:bg-white/10 transition"
+            className="px-2 rounded-lg bg-white/5 text-white/30 active:bg-white/10 transition flex items-center"
             title="Room controls"
           >
-            ⋯
+            <svg width="1.2vw" height="1.2vw" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
           </button>
         </div>
 
@@ -338,7 +346,7 @@ function MusicPanel({
             onClick={onStopMusic}
             className="flex items-center justify-center gap-2 py-1.5 rounded-lg transition text-[0.9vw] font-medium bg-white/5 text-white/40 hover:bg-white/10"
           >
-            <span>⏹</span> Stop Music
+            <svg width="0.9vw" height="0.9vw" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg> Stop Music
           </button>
         )}
       </div>
@@ -498,7 +506,7 @@ function DoorbellOverlay({
       {/* Header bar */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <span className="animate-pulse text-2xl">🔔</span>
+          <svg className="animate-pulse" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
           <span className="text-[1.8vw] font-bold text-white uppercase tracking-[0.3em]">Doorbell</span>
         </div>
         <div className="flex items-center gap-5">
@@ -946,7 +954,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
         title="Configure kiosk"
         className="absolute top-3 right-3 z-30 text-white/10 hover:text-white/50 transition text-xl leading-none"
       >
-        ⚙
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
 
       {/* Top half: three panels */}

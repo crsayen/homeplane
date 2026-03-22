@@ -1,7 +1,26 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ssh:*)"
+      "Bash(ssh:*)",
+      "Bash(npm run:*)",
+      "Bash(npx tsc:*)",
+      "Bash(python3 -c \"from app.main import app; print\\(''Backend imports OK''\\)\")",
+      "Bash(source .venv/bin/activate)",
+      "Bash(python3 -m pytest --collect-only)",
+      "Bash(pip3 show:*)",
+      "Bash(python3:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(brew install:*)",
+      "Bash(sshpass:*)",
+      "mcp__Home_Assistant__ha_get_state",
+      "Bash(git status:*)",
+      "Bash(find /Users/chrissayen/dev/homeplane -name *multi*room*audio* -o -name *audio*.config*)",
+      "mcp__Home_Assistant__ha_config_get_script",
+      "mcp__Home_Assistant__ha_get_system_health",
+      "Bash(npm install:*)",
+      "mcp__Home_Assistant__ha_search_entities"
     ]
   }
 }
