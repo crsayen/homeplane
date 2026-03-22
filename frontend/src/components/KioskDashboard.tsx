@@ -428,6 +428,7 @@ const CamerasPanel = memo(function CamerasPanel({
 function useDoorbellStream() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const [failed, setFailed] = useState(false);
   const retryTimer = useRef<number | null>(null);
   const healthTimer = useRef<number | null>(null);
@@ -437,19 +438,23 @@ function useDoorbellStream() {
   const connect = useCallback(() => {
     // Clean up previous
     if (retryTimer.current !== null) { window.clearTimeout(retryTimer.current); retryTimer.current = null; }
+    wsRef.current?.close();
+    wsRef.current = null;
     pcRef.current?.close();
     pcRef.current = null;
     setFailed(false);
     lastFrameCount.current = 0;
     staleChecks.current = 0;
 
+    // Use go2rtc's WebSocket API for proper trickle ICE signaling
+    const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${wsProto}//${location.host}/go2rtc/api/ws?src=doorbell`);
+    wsRef.current = ws;
+
     const pc = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
     });
     pcRef.current = pc;
-
-    pc.addTransceiver("video", { direction: "recvonly" });
-    pc.addTransceiver("audio", { direction: "recvonly" });
 
     pc.ontrack = (event) => {
       if (videoRef.current && event.streams[0]) {
@@ -465,33 +470,45 @@ function useDoorbellStream() {
       }
     };
 
-    (async () => {
+    // Send ICE candidates to go2rtc as they're gathered
+    pc.onicecandidate = (event) => {
+      if (event.candidate && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: "webrtc/candidate",
+          value: event.candidate.candidate,
+        }));
+      }
+    };
+
+    ws.onopen = async () => {
       try {
+        pc.addTransceiver("video", { direction: "recvonly" });
+        pc.addTransceiver("audio", { direction: "recvonly" });
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-
-        if (pc.iceGatheringState !== "complete") {
-          await new Promise<void>((resolve) => {
-            const timer = setTimeout(resolve, 3000);
-            const check = () => {
-              if (pc.iceGatheringState === "complete") { clearTimeout(timer); resolve(); }
-            };
-            pc.addEventListener("icegatheringstatechange", check);
-            check();
-          });
-        }
-
-        const resp = await fetch(`/go2rtc/api/webrtc?src=doorbell`, {
-          method: "POST",
-          body: pc.localDescription!.sdp,
-        });
-        if (!resp.ok) throw new Error(`go2rtc ${resp.status}`);
-        await pc.setRemoteDescription({ type: "answer", sdp: await resp.text() });
+        ws.send(JSON.stringify({
+          type: "webrtc/offer",
+          value: offer.sdp,
+        }));
       } catch {
         setFailed(true);
         retryTimer.current = window.setTimeout(() => connect(), 5_000);
       }
-    })();
+    };
+
+    ws.onmessage = async (ev) => {
+      const msg = JSON.parse(ev.data);
+      if (msg.type === "webrtc/answer") {
+        await pc.setRemoteDescription({ type: "answer", sdp: msg.value });
+      } else if (msg.type === "webrtc/candidate") {
+        await pc.addIceCandidate({ candidate: msg.value, sdpMid: "0" });
+      }
+    };
+
+    ws.onerror = () => {
+      setFailed(true);
+      retryTimer.current = window.setTimeout(() => connect(), 5_000);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -539,6 +556,8 @@ function useDoorbellStream() {
   useEffect(() => {
     connect();
     return () => {
+      wsRef.current?.close();
+      wsRef.current = null;
       pcRef.current?.close();
       pcRef.current = null;
       if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
