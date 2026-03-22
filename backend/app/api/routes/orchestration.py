@@ -33,6 +33,9 @@ router = APIRouter(prefix="/api", tags=["orchestration"])
 ENTITY_ID_PATTERN = re.compile(r"^[a-z0-9_]+\.[a-zA-Z0-9_]+$")
 logger = getLogger(__name__)
 
+# Track active WebSocket connections for test event injection
+_active_websockets: set[WebSocket] = set()
+
 
 def validate_gpio_pin(pin: int) -> int:
     if pin not in VALID_BCM_PINS:
@@ -454,6 +457,7 @@ async def stream_entities(websocket: WebSocket) -> None:
         return
 
     await websocket.accept()
+    _active_websockets.add(websocket)
     orchestrator = HomeOrchestrator(websocket.app.state.ha_client)
     try:
         async for state in orchestrator.stream_entity_states(entity_ids):
@@ -467,3 +471,36 @@ async def stream_entities(websocket: WebSocket) -> None:
         except Exception:
             pass
         await websocket.close(code=1011, reason="Entity stream failure")
+    finally:
+        _active_websockets.discard(websocket)
+
+
+@router.post("/test/doorbell", dependencies=[Depends(require_api_key)])
+async def test_doorbell(request: Request) -> dict:
+    """Inject a fake doorbell state_changed event into all active WebSockets.
+
+    Bypasses HA entirely so the physical doorbell does NOT ring.
+    """
+    body = await request.json() if await request.body() else {}
+    entity_id = body.get("entity_id", "binary_sensor.g6_entry_doorbell")
+    on_msg = {"type": "state_changed", "state": {"entity_id": entity_id, "state": "on", "attributes": {}}}
+    off_msg = {"type": "state_changed", "state": {"entity_id": entity_id, "state": "off", "attributes": {}}}
+    sent = 0
+    for ws in list(_active_websockets):
+        try:
+            await ws.send_json(on_msg)
+            sent += 1
+        except Exception:
+            pass
+
+    import asyncio
+    async def send_off():
+        await asyncio.sleep(1)
+        for ws in list(_active_websockets):
+            try:
+                await ws.send_json(off_msg)
+            except Exception:
+                pass
+
+    asyncio.create_task(send_off())
+    return {"sent_to": sent}
