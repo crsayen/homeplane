@@ -441,7 +441,7 @@ function useDoorbellStream(active: boolean) {
     setFailed(false);
 
     const pc = new RTCPeerConnection({
-      // No STUN server — LAN only, saves ~2s of ICE gathering
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
     });
     pcRef.current = pc;
 
@@ -468,10 +468,10 @@ function useDoorbellStream(active: boolean) {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
-        // Wait for ICE gathering with tight 1s timeout (LAN only, no STUN)
+        // Wait for ICE gathering (STUN needs a round-trip)
         if (pc.iceGatheringState !== "complete") {
           await new Promise<void>((resolve) => {
-            const timer = setTimeout(resolve, 1000);
+            const timer = setTimeout(resolve, 3000);
             const check = () => {
               if (pc.iceGatheringState === "complete") { clearTimeout(timer); resolve(); }
             };
