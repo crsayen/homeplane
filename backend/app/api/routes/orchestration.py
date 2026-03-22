@@ -481,8 +481,8 @@ async def test_doorbell(request: Request) -> dict:
 
     Bypasses HA entirely so the physical doorbell does NOT ring.
     """
-    body = await request.json() if await request.body() else {}
-    entity_id = body.get("entity_id", "binary_sensor.g6_entry_doorbell")
+    kiosk_cfg = await request.app.state.kiosk_config_store.load()
+    entity_id = kiosk_cfg.doorbell_sensor_entity or "binary_sensor.g6_entry_doorbell"
     on_msg = {"type": "state_changed", "state": {"entity_id": entity_id, "state": "on", "attributes": {}}}
     off_msg = {"type": "state_changed", "state": {"entity_id": entity_id, "state": "off", "attributes": {}}}
     sent = 0
