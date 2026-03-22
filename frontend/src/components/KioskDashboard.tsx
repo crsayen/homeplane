@@ -428,12 +428,22 @@ function useDoorbellStream() {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const [failed, setFailed] = useState(false);
   const reconnectTimer = useRef<number | null>(null);
+  const healthTimer = useRef<number | null>(null);
+  const lastFrameCount = useRef<number>(0);
+  const staleChecks = useRef<number>(0);
+
+  const scheduleReconnect = useCallback((delayMs: number, connectFn: () => void) => {
+    if (reconnectTimer.current !== null) window.clearTimeout(reconnectTimer.current);
+    reconnectTimer.current = window.setTimeout(connectFn, delayMs);
+  }, []);
 
   const connect = useCallback(() => {
     // Clean up previous connection
     pcRef.current?.close();
     pcRef.current = null;
     setFailed(false);
+    lastFrameCount.current = 0;
+    staleChecks.current = 0;
 
     const pc = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -453,9 +463,7 @@ function useDoorbellStream() {
       const s = pc.iceConnectionState;
       if (s === "failed" || s === "disconnected" || s === "closed") {
         setFailed(true);
-        // Auto-reconnect after 10s
-        if (reconnectTimer.current !== null) window.clearTimeout(reconnectTimer.current);
-        reconnectTimer.current = window.setTimeout(() => connect(), 10_000);
+        scheduleReconnect(10_000, () => connect());
       }
     };
 
@@ -483,11 +491,48 @@ function useDoorbellStream() {
         await pc.setRemoteDescription({ type: "answer", sdp: await resp.text() });
       } catch {
         setFailed(true);
-        if (reconnectTimer.current !== null) window.clearTimeout(reconnectTimer.current);
-        reconnectTimer.current = window.setTimeout(() => connect(), 10_000);
+        scheduleReconnect(10_000, () => connect());
       }
     })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Periodic health check — detect silently stalled streams via frame count
+  useEffect(() => {
+    healthTimer.current = window.setInterval(async () => {
+      const pc = pcRef.current;
+      if (!pc || pc.iceConnectionState !== "connected") return;
+
+      try {
+        const stats = await pc.getStats();
+        let currentFrames = 0;
+        stats.forEach((report) => {
+          if (report.type === "inbound-rtp" && report.kind === "video") {
+            currentFrames = report.framesReceived ?? 0;
+          }
+        });
+
+        if (currentFrames === lastFrameCount.current) {
+          staleChecks.current++;
+          // 3 consecutive checks with no new frames (30s) = stale
+          if (staleChecks.current >= 3) {
+            console.warn("[doorbell] Stream stale, reconnecting");
+            setFailed(true);
+            connect();
+          }
+        } else {
+          staleChecks.current = 0;
+          lastFrameCount.current = currentFrames;
+        }
+      } catch {
+        // getStats can fail if connection is closing
+      }
+    }, 10_000);
+
+    return () => {
+      if (healthTimer.current !== null) window.clearInterval(healthTimer.current);
+    };
+  }, [connect]);
 
   useEffect(() => {
     connect();

@@ -20,7 +20,18 @@
       "mcp__Home_Assistant__ha_config_get_script",
       "mcp__Home_Assistant__ha_get_system_health",
       "Bash(npm install:*)",
-      "mcp__Home_Assistant__ha_search_entities"
+      "mcp__Home_Assistant__ha_search_entities",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(curl -s -X POST http://homeassistant.local:8123/api/states/binary_sensor.g6_entry_doorbell -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJlOWZmNDY1OTBjMGM0MTg4YjJiMzk4ODQ4OTc0ZTM1MiIsImlhdCI6MTc3MjIzMTM3NSwiZXhwIjoyMDg3NTkxMzc1fQ.0ypUApvmn3O902h3E7oABpQk5RrSr8GYeA1uOFAxgtU\" -H \"Content-Type: application/json\" -d '{\"\"state\"\": \"\"on\"\"}')",
+      "Bash(curl -s -X POST http://homeassistant.local:8123/api/states/binary_sensor.g6_entry_doorbell -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJlOWZmNDY1OTBjMGM0MTg4YjJiMzk4ODQ4OTc0ZTM1MiIsImlhdCI6MTc3MjIzMTM3NSwiZXhwIjoyMDg3NTkxMzc1fQ.0ypUApvmn3O902h3E7oABpQk5RrSr8GYeA1uOFAxgtU\" -H \"Content-Type: application/json\" -d '{\"\"state\"\": \"\"off\"\"}')",
+      "Bash(curl -s -X POST http://homeassistant.local:8123/api/events/state_changed -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJlOWZmNDY1OTBjMGM0MTg4YjJiMzk4ODQ4OTc0ZTM1MiIsImlhdCI6MTc3MjIzMTM3NSwiZXhwIjoyMDg3NTkxMzc1fQ.0ypUApvmn3O902h3E7oABpQk5RrSr8GYeA1uOFAxgtU\" -H \"Content-Type: application/json\" -d '{\"\"entity_id\"\":\"\"binary_sensor.g6_entry_doorbell\"\",\"\"new_state\"\":{\"\"state\"\":\"\"on\"\",\"\"attributes\"\":{},\"\"entity_id\"\":\"\"binary_sensor.g6_entry_doorbell\"\"},\"\"old_state\"\":{\"\"state\"\":\"\"off\"\",\"\"attributes\"\":{},\"\"entity_id\"\":\"\"binary_sensor.g6_entry_doorbell\"\"}}')",
+      "Bash(curl -s -X POST http://homeassistant.local:8123/api/events/state_changed -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJlOWZmNDY1OTBjMGM0MTg4YjJiMzk4ODQ4OTc0ZTM1MiIsImlhdCI6MTc3MjIzMTM3NSwiZXhwIjoyMDg3NTkxMzc1fQ.0ypUApvmn3O902h3E7oABpQk5RrSr8GYeA1uOFAxgtU\" -H \"Content-Type: application/json\" -d '{\"\"entity_id\"\":\"\"binary_sensor.g6_entry_doorbell\"\",\"\"new_state\"\":{\"\"state\"\":\"\"off\"\",\"\"attributes\"\":{},\"\"entity_id\"\":\"\"binary_sensor.g6_entry_doorbell\"\"},\"\"old_state\"\":{\"\"state\"\":\"\"on\"\",\"\"attributes\"\":{},\"\"entity_id\"\":\"\"binary_sensor.g6_entry_doorbell\"\"}}')",
+      "Bash(curl -s -X POST https://homeplane.lan/api/test/doorbell -H \"x-homeplane-key: afford-marble-mansion\" -H \"Content-Type: application/json\" -k)",
+      "mcp__Home_Assistant__ha_config_info",
+      "Bash(curl -s https://homeplane.lan/api/kiosk/config -H \"x-homeplane-key: afford-marble-mansion\" -k)",
+      "Bash(curl -s https://homeplane.lan/api/kiosk-config -H \"x-homeplane-key: afford-marble-mansion\" -k)",
+      "Bash(curl -s -X POST https://homeplane.lan/api/test/doorbell -H \"x-homeplane-key: afford-marble-mansion\" -k)"
     ]
   }
 }
