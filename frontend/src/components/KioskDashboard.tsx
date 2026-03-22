@@ -22,26 +22,42 @@ function formatDate(date: Date): string {
   return `${WEEKDAYS[date.getDay()]}, ${MONTHS[date.getMonth()]} ${date.getDate()}`;
 }
 
-function weatherEmoji(condition: string): string {
-  const map: Record<string, string> = {
-    "sunny": "☀️",
-    "clear-night": "🌙",
-    "partlycloudy": "⛅",
-    "cloudy": "☁️",
-    "rainy": "🌧️",
-    "pouring": "🌧️",
-    "snowy": "❄️",
-    "snowy-rainy": "🌨️",
-    "fog": "🌫️",
-    "hail": "🌨️",
-    "lightning": "⚡",
-    "lightning-rainy": "⛈️",
-    "windy": "💨",
-    "windy-variant": "💨",
-    "exceptional": "❗",
-    "tornado": "🌪️",
-  };
-  return map[condition.toLowerCase()] ?? "☁️";
+function WeatherIcon({ condition, size = "1em" }: { condition: string; size?: string }) {
+  const c = condition.toLowerCase();
+  const p = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  // Sun
+  if (c === "sunny") return <svg {...p}><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/><path d="M12 2v3m0 14v3M4.22 4.22l2.12 2.12m11.32 11.32l2.12 2.12M2 12h3m14 0h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>;
+  // Moon
+  if (c === "clear-night") return <svg {...p}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor" stroke="none"/></svg>;
+  // Cloud (base shape used by many)
+  const cloud = <path d="M6 19a4 4 0 0 1-.99-7.88A5.5 5.5 0 0 1 16 9.5 3.5 3.5 0 0 1 19 16H6z"/>;
+  if (c === "cloudy") return <svg {...p}>{cloud}</svg>;
+  // Partly cloudy (sun + cloud)
+  if (c === "partlycloudy") return <svg {...p}><circle cx="10" cy="7" r="3" fill="currentColor" stroke="none" opacity="0.6"/><path d="M10 2v1.5M4.5 4.5l1 1M2 7h1.5m11 0h1.5M15.5 4.5l-1 1"/>{cloud}</svg>;
+  // Rainy
+  if (c === "rainy") return <svg {...p}>{cloud}<path d="M8 19v2m4-2v2m4-2v2"/></svg>;
+  // Pouring
+  if (c === "pouring") return <svg {...p}>{cloud}<path d="M7 19v3m4-3v3m4-3v3m-10-2v3m8-3v3"/></svg>;
+  // Snowy
+  if (c === "snowy") return <svg {...p}>{cloud}<circle cx="8" cy="21" r="0.5" fill="currentColor" stroke="none"/><circle cx="12" cy="21" r="0.5" fill="currentColor" stroke="none"/><circle cx="16" cy="21" r="0.5" fill="currentColor" stroke="none"/><circle cx="10" cy="23" r="0.5" fill="currentColor" stroke="none"/><circle cx="14" cy="23" r="0.5" fill="currentColor" stroke="none"/></svg>;
+  // Snowy-rainy
+  if (c === "snowy-rainy") return <svg {...p}>{cloud}<path d="M8 19v2m12-2v2"/><circle cx="12" cy="21" r="0.5" fill="currentColor" stroke="none"/><circle cx="16" cy="21" r="0.5" fill="currentColor" stroke="none"/></svg>;
+  // Fog
+  if (c === "fog") return <svg {...p}>{cloud}<path d="M5 21h14M7 23h10"/></svg>;
+  // Hail
+  if (c === "hail") return <svg {...p}>{cloud}<circle cx="8" cy="20.5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="20.5" r="1" fill="currentColor" stroke="none"/><circle cx="16" cy="20.5" r="1" fill="currentColor" stroke="none"/></svg>;
+  // Lightning
+  if (c === "lightning") return <svg {...p}>{cloud}<path d="M13 16l-2 4h4l-2 4" strokeWidth="2"/></svg>;
+  // Lightning-rainy
+  if (c === "lightning-rainy") return <svg {...p}>{cloud}<path d="M13 16l-2 4h4l-2 4" strokeWidth="2"/><path d="M8 19v2"/></svg>;
+  // Windy
+  if (c === "windy" || c === "windy-variant") return <svg {...p}><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></svg>;
+  // Exceptional
+  if (c === "exceptional") return <svg {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
+  // Tornado
+  if (c === "tornado") return <svg {...p}><path d="M3 4h18M5 8h14M7 12h10M9 16h6M10 20h4"/></svg>;
+  // Default: cloud
+  return <svg {...p}>{cloud}</svg>;
 }
 
 function toWsUrl(apiBaseUrl: string): string {
@@ -94,7 +110,7 @@ const WeatherPanel = memo(function WeatherPanel({ state, forecast }: { state: En
 
       {/* Current */}
       <div className="flex items-center gap-3">
-        <span className="text-[5vw] leading-none">{weatherEmoji(state.state)}</span>
+        <span className="text-[5vw] leading-none"><WeatherIcon condition={state.state} size="5vw" /></span>
         <div>
           <div className="text-[5.5vw] font-bold leading-none text-white tabular-nums">
             {temp !== undefined ? `${Math.round(temp)}${unit}` : "--"}
@@ -114,7 +130,7 @@ const WeatherPanel = memo(function WeatherPanel({ state, forecast }: { state: En
             return (
               <div key={item.datetime} className="flex flex-col items-center gap-0.5 flex-1">
                 <div className="text-[0.7vw] text-white/30 font-semibold uppercase tracking-wide">{label}</div>
-                <div className="text-[1.3vw]">{weatherEmoji(item.condition)}</div>
+                <div className="text-[1.3vw]"><WeatherIcon condition={item.condition} size="1.3vw" /></div>
                 <div className="text-[0.85vw] text-white/70 font-semibold tabular-nums">
                   {Math.round(item.temperature)}°
                 </div>
