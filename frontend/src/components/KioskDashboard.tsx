@@ -422,144 +422,45 @@ const CamerasPanel = memo(function CamerasPanel({
   );
 });
 
-// Always-on WebRTC connection to go2rtc with health monitoring.
-// Stays connected so doorbell video is instant. Reconnects automatically
-// if the stream stalls or the camera drops the RTSP connection.
+// Always-on fragmented MP4 stream from go2rtc. Stays connected so doorbell
+// video is instant when the doorbell rings. Reconnects automatically on error.
 function useDoorbellStream() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
   const [failed, setFailed] = useState(false);
   const retryTimer = useRef<number | null>(null);
-  const healthTimer = useRef<number | null>(null);
-  const lastFrameCount = useRef<number>(0);
-  const staleChecks = useRef<number>(0);
+  const cleanupRef = useRef<(() => void) | null>(null);
 
   const connect = useCallback(() => {
-    // Clean up previous
     if (retryTimer.current !== null) { window.clearTimeout(retryTimer.current); retryTimer.current = null; }
-    wsRef.current?.close();
-    wsRef.current = null;
-    pcRef.current?.close();
-    pcRef.current = null;
+    if (cleanupRef.current) { cleanupRef.current(); cleanupRef.current = null; }
     setFailed(false);
-    lastFrameCount.current = 0;
-    staleChecks.current = 0;
 
-    // Use go2rtc's WebSocket API for proper trickle ICE signaling
-    const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${wsProto}//${location.host}/go2rtc/api/ws?src=doorbell`);
-    wsRef.current = ws;
+    const video = videoRef.current;
+    if (!video) return;
 
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-    });
-    pcRef.current = pc;
-
-    pc.ontrack = (event) => {
-      if (videoRef.current && event.streams[0]) {
-        videoRef.current.srcObject = event.streams[0];
-        videoRef.current.play().catch(() => {});
-      }
-    };
-    pc.oniceconnectionstatechange = () => {
-      const s = pc.iceConnectionState;
-      if (s === "failed" || s === "disconnected" || s === "closed") {
-        setFailed(true);
-        retryTimer.current = window.setTimeout(() => connect(), 5_000);
-      }
-    };
-
-    // Send ICE candidates to go2rtc as they're gathered
-    pc.onicecandidate = (event) => {
-      if (event.candidate && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: "webrtc/candidate",
-          value: event.candidate.candidate,
-        }));
-      }
-    };
-
-    ws.onopen = async () => {
-      try {
-        pc.addTransceiver("video", { direction: "recvonly" });
-        pc.addTransceiver("audio", { direction: "recvonly" });
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        ws.send(JSON.stringify({
-          type: "webrtc/offer",
-          value: offer.sdp,
-        }));
-      } catch {
-        setFailed(true);
-        retryTimer.current = window.setTimeout(() => connect(), 5_000);
-      }
-    };
-
-    ws.onmessage = async (ev) => {
-      const msg = JSON.parse(ev.data);
-      if (msg.type === "webrtc/answer") {
-        await pc.setRemoteDescription({ type: "answer", sdp: msg.value });
-      } else if (msg.type === "webrtc/candidate") {
-        await pc.addIceCandidate({ candidate: msg.value, sdpMid: "0" });
-      }
-    };
-
-    ws.onerror = () => {
+    const handleError = () => {
       setFailed(true);
       retryTimer.current = window.setTimeout(() => connect(), 5_000);
+    };
+    const handlePlaying = () => setFailed(false);
+
+    video.addEventListener("error", handleError);
+    video.addEventListener("playing", handlePlaying);
+    video.src = "/go2rtc/api/stream.mp4?src=doorbell";
+    video.play().catch(() => {});
+
+    cleanupRef.current = () => {
+      video.removeEventListener("error", handleError);
+      video.removeEventListener("playing", handlePlaying);
+      video.src = "";
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Health check every 15s — detect stale streams and reconnect
-  useEffect(() => {
-    healthTimer.current = window.setInterval(async () => {
-      const pc = pcRef.current;
-      if (!pc) return;
-
-      // If not connected yet, skip
-      if (pc.iceConnectionState !== "connected") return;
-
-      try {
-        const stats = await pc.getStats();
-        let currentFrames = 0;
-        stats.forEach((report) => {
-          if (report.type === "inbound-rtp" && report.kind === "video") {
-            currentFrames = report.framesReceived ?? 0;
-          }
-        });
-
-        if (currentFrames === lastFrameCount.current) {
-          staleChecks.current++;
-          // 3 checks with no new frames (45s) = stale, reconnect
-          if (staleChecks.current >= 3) {
-            console.warn("[doorbell] Stream stale, reconnecting");
-            connect();
-          }
-        } else {
-          staleChecks.current = 0;
-          if (failed) setFailed(false);
-          lastFrameCount.current = currentFrames;
-        }
-      } catch {
-        // getStats can fail if connection is closing
-      }
-    }, 15_000);
-
-    return () => {
-      if (healthTimer.current !== null) window.clearInterval(healthTimer.current);
-    };
-  }, [connect, failed]);
-
-  // Connect on mount
   useEffect(() => {
     connect();
     return () => {
-      wsRef.current?.close();
-      wsRef.current = null;
-      pcRef.current?.close();
-      pcRef.current = null;
+      if (cleanupRef.current) { cleanupRef.current(); cleanupRef.current = null; }
       if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
     };
   }, [connect]);
