@@ -925,14 +925,17 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
 
   return (
     <div className="h-screen w-screen overflow-hidden flex flex-col bg-[#0a0a0a] text-white">
-      {/* Persistent doorbell video element — always in DOM, hidden when not active */}
+      {/* Persistent doorbell video element — always in DOM so WebRTC stays connected.
+           Hidden off-screen when not active, shown inside overlay when doorbell rings. */}
       <video
         ref={doorbellStream.videoRef}
         autoPlay
         muted
         playsInline
-        className={`fixed inset-0 z-50 w-full h-full object-contain bg-black ${doorbellActive ? "" : "hidden"}`}
-        style={{ top: "48px" }}
+        className={doorbellActive
+          ? "fixed z-[51] object-contain bg-black"
+          : "fixed -top-[9999px] -left-[9999px] w-0 h-0"}
+        style={doorbellActive ? { top: "48px", left: 0, right: 0, bottom: 0, width: "100%", height: "calc(100% - 48px)" } : undefined}
       />
 
       {/* Doorbell takeover */}
