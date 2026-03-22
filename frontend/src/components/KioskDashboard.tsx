@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EntityStateResponse, HomeplaneClient, KioskConfig, WeatherForecastItem } from "../api/homeplaneClient";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -54,7 +54,28 @@ function toWsUrl(apiBaseUrl: string): string {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function WeatherPanel({ state, forecast }: { state: EntityStateResponse | null; forecast: WeatherForecastItem[] }) {
+function Clock() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center select-none overflow-hidden">
+      <div className="font-sans font-bold leading-none text-white tabular-nums" style={{ fontSize: "16vw" }}>
+        {formatTime(now)}
+      </div>
+      <div
+        className="mt-4 font-semibold uppercase tracking-[0.35em] text-white/35"
+        style={{ fontSize: "2.5vw" }}
+      >
+        {formatDate(now)}
+      </div>
+    </div>
+  );
+}
+
+const WeatherPanel = memo(function WeatherPanel({ state, forecast }: { state: EntityStateResponse | null; forecast: WeatherForecastItem[] }) {
   if (!state) {
     return (
       <div className="h-full flex items-center justify-center text-white/20 text-sm">
@@ -109,7 +130,7 @@ function WeatherPanel({ state, forecast }: { state: EntityStateResponse | null; 
       )}
     </div>
   );
-}
+});
 
 // Two media player entities for the same WiiM Pro hardware:
 // - Native (WiiM integration): has track info for Spotify Connect, AirPlay, etc.
@@ -126,7 +147,7 @@ const INDOOR_SWITCHES = [
   "switch.craftzone_power",
 ] as const;
 
-function MusicPanel({
+const MusicPanel = memo(function MusicPanel({
   displayState,
   albumArtUrl,
   switchStates,
@@ -352,9 +373,9 @@ function MusicPanel({
       </div>
     </div>
   );
-}
+});
 
-function CamerasPanel({
+const CamerasPanel = memo(function CamerasPanel({
   config,
   camTimestamp,
   client,
@@ -394,7 +415,7 @@ function CamerasPanel({
       </div>
     </div>
   );
-}
+});
 
 function DoorbellOverlay({
   config,
@@ -623,7 +644,6 @@ const EMPTY_CONFIG: KioskConfig = {
 export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; apiKey: string }) {
   const client = useMemo(() => new HomeplaneClient(apiBaseUrl, apiKey), [apiBaseUrl, apiKey]);
 
-  const [now, setNow] = useState(new Date());
   const [config, setConfig] = useState<KioskConfig | null>(null);
   const [weatherState, setWeatherState] = useState<EntityStateResponse | null>(null);
   const [weatherForecast, setWeatherForecast] = useState<WeatherForecastItem[]>([]);
@@ -649,12 +669,6 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
   useEffect(() => {
     document.documentElement.classList.add("dark");
     return () => document.documentElement.classList.remove("dark");
-  }, []);
-
-  // Clock tick
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
   }, []);
 
   // Camera refresh (every 60s)
@@ -849,42 +863,44 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
       : rawPicture
     : undefined;
 
-  const handlePlayMusic = () => {
+  const handlePlayMusic = useCallback(() => {
     setMusicPending(true);
     client.runScript("script.play_music").catch(() => {});
     ensureSpeakersOn(3);
-  };
+  }, [client]);
 
-  const handleStopMusic = () => {
+  const handleStopMusic = useCallback(() => {
     if (retryTimerRef.current !== null) {
       window.clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;
     }
     setMusicPending(false);
     client.runScript("script.stop_music_indoor").catch(() => {});
-  };
+  }, [client]);
 
-  const handleSkip = () => {
+  const handleSkip = useCallback(() => {
     client.mediaPlayerCommand(activeMediaEntity, "next_track").catch(() => {});
-  };
+  }, [client, activeMediaEntity]);
 
-  const handlePlayPause = () => {
+  const handlePlayPause = useCallback(() => {
     client.mediaPlayerCommand(activeMediaEntity, "play_pause").catch(() => {});
-  };
+  }, [client, activeMediaEntity]);
 
-  const handlePrevious = () => {
+  const handlePrevious = useCallback(() => {
     client.mediaPlayerCommand(activeMediaEntity, "previous_track").catch(() => {});
-  };
+  }, [client, activeMediaEntity]);
 
-  const handlePlayEverywhere = () => {
+  const handlePlayEverywhere = useCallback(() => {
     setMusicPending(true);
     client.runScript("script.indoor_speakers_on").catch(() => {});
     ensureSpeakersOn(3);
-  };
+  }, [client]);
 
-  const handleVolumeCommit = (vol: number) => {
+  const handleVolumeCommit = useCallback((vol: number) => {
     client.setInputNumberValue("input_number.indoor_volume", vol).catch(() => {});
-  };
+  }, [client]);
+
+  const handleOpenRooms = useCallback(() => setRoomsOpen(true), []);
 
   const handleSaveConfig = () => {
     setConfigSaveError(null);
@@ -975,7 +991,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
             onSkip={handleSkip}
             onPlayPause={handlePlayPause}
             onPrevious={handlePrevious}
-            onOpenRooms={() => setRoomsOpen(true)}
+            onOpenRooms={handleOpenRooms}
             onVolumeCommit={handleVolumeCommit}
           />
         </div>
@@ -990,18 +1006,8 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
       {/* Divider */}
       <div className="border-t border-white/10 shrink-0" />
 
-      {/* Bottom half: clock */}
-      <div className="flex-1 flex flex-col items-center justify-center select-none overflow-hidden">
-        <div className="font-sans font-bold leading-none text-white tabular-nums" style={{ fontSize: "16vw" }}>
-          {formatTime(now)}
-        </div>
-        <div
-          className="mt-4 font-semibold uppercase tracking-[0.35em] text-white/35"
-          style={{ fontSize: "2vw" }}
-        >
-          {formatDate(now)}
-        </div>
-      </div>
+      {/* Bottom half: clock (isolated — only this component re-renders every second) */}
+      <Clock />
     </div>
   );
 }
