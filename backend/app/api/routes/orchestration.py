@@ -484,7 +484,6 @@ async def test_doorbell(request: Request) -> dict:
     kiosk_cfg = await request.app.state.kiosk_config_store.load()
     entity_id = kiosk_cfg.doorbell_sensor_entity or "binary_sensor.g6_entry_doorbell"
     on_msg = {"type": "state_changed", "state": {"entity_id": entity_id, "state": "on", "attributes": {}}}
-    off_msg = {"type": "state_changed", "state": {"entity_id": entity_id, "state": "off", "attributes": {}}}
     sent = 0
     for ws in list(_active_websockets):
         try:
@@ -492,15 +491,4 @@ async def test_doorbell(request: Request) -> dict:
             sent += 1
         except Exception:
             pass
-
-    import asyncio
-    async def send_off():
-        await asyncio.sleep(1)
-        for ws in list(_active_websockets):
-            try:
-                await ws.send_json(off_msg)
-            except Exception:
-                pass
-
-    asyncio.create_task(send_off())
     return {"sent_to": sent}
