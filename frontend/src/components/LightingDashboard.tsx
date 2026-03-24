@@ -1,4 +1,4 @@
-import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   EntityStateResponse,
@@ -10,6 +10,9 @@ import {
 import { UiDensity } from "../lib/uiDensity";
 import { ThemeMode } from "../lib/themeMode";
 import { DashboardTopBar } from "./DashboardTopBar";
+import { toWebSocketUrl } from "../lib/webSocket";
+import { normalizePath } from "../lib/normalizePath";
+import { ScrollingName } from "./ScrollingName";
 
 type LightStateMap = Record<string, EntityStateResponse | undefined>;
 type StreamState = "connecting" | "live" | "reconnecting";
@@ -42,14 +45,6 @@ const DRAG_HOLD_DELAY_MS = 280;
 const DRAG_CANCEL_DISTANCE_PX = 8;
 const DRAG_PIXELS_PER_PERCENT = 1.6;
 
-function toWebSocketUrl(apiBaseUrl: string): string {
-  const parsed = new URL(apiBaseUrl);
-  parsed.protocol = parsed.protocol === "https:" ? "wss:" : "ws:";
-  parsed.pathname = "/api/ws/entities";
-  parsed.search = "";
-  return parsed.toString();
-}
-
 function clampPercent(value: number): number {
   return Math.max(1, Math.min(100, Math.round(value)));
 }
@@ -67,13 +62,6 @@ function brightnessPercentFromState(state?: EntityStateResponse): number {
     return 100;
   }
   return 50;
-}
-
-function normalizePath(pathname: string): string {
-  if (pathname === "/") {
-    return pathname;
-  }
-  return pathname.replace(/\/+$/, "");
 }
 
 function normalizeLightConfig(light: string | LightingEntityConfig): NormalizedLight {
@@ -181,67 +169,118 @@ function LightIcon({ icon, className }: { icon?: string; className?: string }) {
   }
 }
 
-function ScrollingLightName({ name }: { name: string }) {
-  const containerRef = useRef<HTMLSpanElement | null>(null);
-  const textRef = useRef<HTMLSpanElement | null>(null);
-  const [overflowPx, setOverflowPx] = useState(0);
-  const [textWidthPx, setTextWidthPx] = useState(0);
+// --- LightCard: memoized per-entity card (Issue 2) ---
 
-  useEffect(() => {
-    function measure() {
-      const container = containerRef.current;
-      const text = textRef.current;
-      if (!container || !text) {
-        return;
-      }
-      const measuredTextWidth = Math.ceil(text.scrollWidth);
-      const nextOverflow = Math.max(0, measuredTextWidth - container.clientWidth);
-      setOverflowPx(nextOverflow);
-      setTextWidthPx(measuredTextWidth);
-    }
+type LightCardProps = {
+  light: NormalizedLight;
+  state: EntityStateResponse | undefined;
+  isBusy: boolean;
+  isPending: boolean;
+  isDimmable: boolean;
+  activeDrag: DragState | null;
+  dragBrightness: number | undefined;
+  onToggle: (entityId: string, isOn: boolean, timeoutSeconds?: number) => void;
+  onPointerDown: (
+    event: React.PointerEvent<HTMLButtonElement>,
+    light: NormalizedLight,
+    currentState: EntityStateResponse | undefined,
+    currentDragBrightness: number | undefined,
+    isDimmable: boolean,
+    isBusy: boolean,
+    isPending: boolean
+  ) => void;
+};
 
-    measure();
-    const observer = new ResizeObserver(measure);
-    if (containerRef.current) {
-      observer.observe(containerRef.current);
-    }
-    if (textRef.current) {
-      observer.observe(textRef.current);
-    }
-    return () => observer.disconnect();
-  }, [name]);
-
-  const isTruncated = overflowPx > 0;
-  const style = (
-    isTruncated
-      ? {
-          ["--light-name-shift" as string]: `${Math.max(1, textWidthPx)}px`,
-          ["--light-name-duration" as string]: `${Math.max(2.2, textWidthPx / 52)}s`,
-        }
-      : {}
-  ) as CSSProperties;
+const LightCard = memo(function LightCard({
+  light,
+  state,
+  isBusy,
+  isPending,
+  isDimmable,
+  activeDrag,
+  dragBrightness,
+  onToggle,
+  onPointerDown,
+}: LightCardProps) {
+  const isOn = state?.state === "on";
 
   return (
-    <span ref={containerRef} className={isTruncated ? "light-name-fade light-name-fade-both" : "light-name-fade"}>
-      {isTruncated ? (
-        <span style={style} className="light-name-scroll-track">
-          <span ref={textRef} className="light-name-copy">
-            {name}
-            {"\u00a0\u00a0"}
-          </span>
-          <span className="light-name-copy" aria-hidden="true">
-            {name}
-            {"\u00a0\u00a0"}
-          </span>
+    <button
+      type="button"
+      disabled={isBusy || isPending}
+      onPointerDown={(event) =>
+        onPointerDown(event, light, state, dragBrightness, isDimmable, isBusy, isPending)
+      }
+      onClick={() => {
+        onToggle(light.entity_id, isOn, light.update_timeout_seconds);
+      }}
+      className={`hp-light-row group relative flex h-14 w-full items-center gap-1.5 rounded-xl border px-3 text-left transition disabled:cursor-not-allowed disabled:opacity-55 ${
+        isOn
+          ? "border-amber-300/75 bg-amber-100/85 text-slate-900 ring-1 ring-amber-300/55 shadow-[0_0_20px_rgba(251,191,36,0.22)] dark:border-amber-500/55 dark:bg-amber-900/45 dark:text-amber-100 dark:ring-amber-500/25"
+          : "border-slate-300/80 bg-slate-200/75 text-slate-700 hover:border-amber-300 hover:bg-amber-50/60 dark:border-white/10 dark:bg-[#0a0a0a]/95 dark:text-slate-300 dark:hover:border-amber-900 dark:hover:bg-[#0d0d0d]"
+      }`}
+      title={light.entity_id}
+    >
+      <LightIcon
+        icon={light.icon}
+        className={`hp-light-icon h-5 w-5 shrink-0 transition sm:h-6 sm:w-6 ${
+          isOn
+            ? "text-slate-900 dark:text-amber-100"
+            : "text-slate-400/70 dark:text-slate-600/80"
+        }`}
+      />
+      <span className="block min-w-0 flex-1 text-sm font-medium leading-tight sm:text-[0.93rem]">
+        <ScrollingName name={lightLabel(light, state)} />
+      </span>
+      {isDimmable ? (
+        <span className="inline-flex h-3 w-3 shrink-0 items-center justify-center" title="Dimmable">
+          <svg
+            viewBox="0 0 16 16"
+            className="h-3 w-3 text-cyan-600 dark:text-cyan-300 dark:drop-shadow-[0_0_6px_rgba(103,232,249,0.7)]"
+            aria-hidden="true"
+          >
+            <circle
+              cx="8"
+              cy="8"
+              r="5.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              pathLength="100"
+              strokeDasharray="60 40"
+              transform="rotate(95 8 8)"
+            />
+          </svg>
         </span>
-      ) : (
-        <span ref={textRef} className="light-name-static">
-          {name}
+      ) : null}
+      {isPending ? (
+        <span className="inline-flex shrink-0 items-center">
+          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-500/45 border-t-slate-900 dark:border-slate-400/30 dark:border-t-slate-100" />
         </span>
-      )}
-    </span>
+      ) : null}
+      {activeDrag?.holdReady ? (
+        <div
+          className={`absolute top-1/2 z-20 h-28 w-10 -translate-y-1/2 rounded-xl border border-slate-300/80 bg-white p-1 shadow-lg dark:border-white/15 dark:bg-[#090909] ${
+            activeDrag.meterSide === "right" ? "left-[calc(100%+0.35rem)]" : "right-[calc(100%+0.35rem)]"
+          }`}
+        >
+          <div className="relative h-full w-full rounded-md bg-slate-200/80 dark:bg-slate-700/70">
+            <div
+              className="absolute bottom-0 left-0 right-0 rounded-md bg-amber-400/90"
+              style={{ height: `${activeDrag.currentBrightnessPct}%` }}
+            />
+          </div>
+          <div className="mt-1 text-center text-[9px] font-semibold text-slate-700 dark:text-slate-200">
+            {activeDrag.currentBrightnessPct}%
+          </div>
+        </div>
+      ) : null}
+    </button>
   );
-}
+});
+
+// --- LightingDashboard ---
 
 export function LightingDashboard({
   apiBaseUrl,
@@ -268,7 +307,9 @@ export function LightingDashboard({
   const [streamState, setStreamState] = useState<StreamState>("connecting");
   const [busyEntityId, setBusyEntityId] = useState<string | null>(null);
   const [pendingTransitions, setPendingTransitions] = useState<PendingTransitionMap>({});
-  const [dragState, setDragState] = useState<DragState | null>(null);
+  // Issue 1: store dragState in a ref so the pointer effect doesn't re-register on every move
+  const dragStateRef = useRef<DragState | null>(null);
+  const [dragState, _setDragState] = useState<DragState | null>(null);
   const [dragBrightness, setDragBrightness] = useState<Record<string, number | undefined>>({});
   const [editorOpen, setEditorOpen] = useState(false);
   const [configDraft, setConfigDraft] = useState('{\n  "rooms": []\n}');
@@ -282,7 +323,19 @@ export function LightingDashboard({
   const dragHoldTimerRef = useRef<number | null>(null);
   const activeDragButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  function clearActiveDragButtonTouchLock(pointerId?: number): void {
+  // Custom setter that keeps dragStateRef in sync (Issue 1)
+  const setDragState = useCallback(
+    (updater: DragState | null | ((prev: DragState | null) => DragState | null)) => {
+      _setDragState((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        dragStateRef.current = next;
+        return next;
+      });
+    },
+    []
+  );
+
+  const clearActiveDragButtonTouchLock = useCallback((pointerId?: number): void => {
     const button = activeDragButtonRef.current;
     if (!button) {
       return;
@@ -297,9 +350,9 @@ export function LightingDashboard({
     button.style.touchAction = "";
     button.style.overscrollBehavior = "";
     activeDragButtonRef.current = null;
-  }
+  }, []);
 
-  function enableActiveDragButtonTouchLock(pointerId: number): void {
+  const enableActiveDragButtonTouchLock = useCallback((pointerId: number): void => {
     const button = activeDragButtonRef.current;
     if (!button) {
       return;
@@ -311,7 +364,40 @@ export function LightingDashboard({
     } catch {
       // Ignore if pointer capture is unavailable on this browser.
     }
-  }
+  }, []);
+
+  const clearPendingTransition = useCallback((entityId: string): void => {
+    const timeoutId = pendingTimeoutsRef.current[entityId];
+    if (timeoutId !== undefined) {
+      window.clearTimeout(timeoutId);
+      delete pendingTimeoutsRef.current[entityId];
+    }
+    setPendingTransitions((previous) => {
+      if (!previous[entityId]) {
+        return previous;
+      }
+      const next = { ...previous };
+      delete next[entityId];
+      return next;
+    });
+  }, []);
+
+  const clearClickSuppression = useCallback((entityId: string): void => {
+    const timeoutId = suppressClickTimeoutsRef.current[entityId];
+    if (timeoutId !== undefined) {
+      window.clearTimeout(timeoutId);
+      delete suppressClickTimeoutsRef.current[entityId];
+    }
+    suppressClickRef.current.delete(entityId);
+  }, []);
+
+  const queueClickSuppression = useCallback((entityId: string, ttlMs = 450): void => {
+    clearClickSuppression(entityId);
+    suppressClickRef.current.add(entityId);
+    suppressClickTimeoutsRef.current[entityId] = window.setTimeout(() => {
+      clearClickSuppression(entityId);
+    }, ttlMs);
+  }, [clearClickSuppression]);
 
   const lightConfigByEntity = useMemo(() => {
     const mapping: Record<string, NormalizedLight> = {};
@@ -327,40 +413,29 @@ export function LightingDashboard({
     return mapping;
   }, [config]);
 
-  function clearPendingTransition(entityId: string): void {
-    const timeoutId = pendingTimeoutsRef.current[entityId];
-    if (timeoutId !== undefined) {
-      window.clearTimeout(timeoutId);
-      delete pendingTimeoutsRef.current[entityId];
+  // Issue 4: precompute on-counts for all rooms
+  const roomOnCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    if (!config) return counts;
+    for (const room of config.rooms) {
+      counts[room.name] = room.lights.filter((light) => {
+        const entityId = typeof light === "string" ? light : light.entity_id;
+        return lightStates[entityId]?.state === "on";
+      }).length;
     }
-    setPendingTransitions((previous) => {
-      if (!previous[entityId]) {
-        return previous;
-      }
-      const next = { ...previous };
-      delete next[entityId];
-      return next;
-    });
-  }
+    return counts;
+  }, [config, lightStates]);
 
-  function clearClickSuppression(entityId: string): void {
-    const timeoutId = suppressClickTimeoutsRef.current[entityId];
-    if (timeoutId !== undefined) {
-      window.clearTimeout(timeoutId);
-      delete suppressClickTimeoutsRef.current[entityId];
+  const refreshLightState = useCallback(async (entityId: string): Promise<void> => {
+    try {
+      const state = await client.getEntityState(entityId);
+      setLightStates((prev) => ({ ...prev, [entityId]: state }));
+    } catch {
+      setLightStates((prev) => ({ ...prev, [entityId]: undefined }));
     }
-    suppressClickRef.current.delete(entityId);
-  }
+  }, [client]);
 
-  function queueClickSuppression(entityId: string, ttlMs = 450): void {
-    clearClickSuppression(entityId);
-    suppressClickRef.current.add(entityId);
-    suppressClickTimeoutsRef.current[entityId] = window.setTimeout(() => {
-      clearClickSuppression(entityId);
-    }, ttlMs);
-  }
-
-  async function sendBrightnessUpdate(entityId: string, brightnessPct: number): Promise<void> {
+  const sendBrightnessUpdate = useCallback(async (entityId: string, brightnessPct: number): Promise<void> => {
     const now = Date.now();
     const last = dragThrottleRef.current[entityId] ?? 0;
     if (now - last < 120) {
@@ -368,261 +443,16 @@ export function LightingDashboard({
     }
     dragThrottleRef.current[entityId] = now;
     await client.setLightState(entityId, { is_on: true, brightness_pct: brightnessPct });
-  }
-
-  async function refreshLightState(entityId: string): Promise<void> {
-    try {
-      const state = await client.getEntityState(entityId);
-      setLightStates((prev) => ({ ...prev, [entityId]: state }));
-    } catch {
-      setLightStates((prev) => ({ ...prev, [entityId]: undefined }));
-    }
-  }
-
-  async function refreshAllStates(currentConfig: LightingConfig): Promise<void> {
-    const lights = currentConfig.rooms.flatMap((room) => room.lights.map((light) => normalizeLightConfig(light).entity_id));
-    await Promise.all(lights.map(async (lightId) => refreshLightState(lightId)));
-  }
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const payload = await client.getLightingConfig();
-        if (cancelled) {
-          return;
-        }
-        setConfig(payload);
-        setConfigDraft(JSON.stringify(payload, null, 2));
-        await refreshAllStates(payload);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load lighting dashboard");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
   }, [client]);
 
-  useEffect(() => {
-    const toClear = Object.entries(pendingTransitions)
-      .filter(([entityId, pending]) => pending && lightStates[entityId]?.state === pending.targetState)
-      .map(([entityId]) => entityId);
-
-    if (toClear.length === 0) {
+  // Issue 2: stable toggle callback passed to memoized LightCard
+  // Suppression check is here so LightCard doesn't need the suppressClickRef
+  const toggleLight = useCallback(async (lightId: string, isOn: boolean, timeoutSeconds?: number): Promise<void> => {
+    if (suppressClickRef.current.has(lightId)) {
+      clearClickSuppression(lightId);
       return;
     }
 
-    for (const entityId of toClear) {
-      clearPendingTransition(entityId);
-    }
-  }, [lightStates, pendingTransitions]);
-
-  useEffect(() => {
-    return () => {
-      if (dragHoldTimerRef.current !== null) {
-        window.clearTimeout(dragHoldTimerRef.current);
-        dragHoldTimerRef.current = null;
-      }
-      clearActiveDragButtonTouchLock();
-      for (const timeoutId of Object.values(pendingTimeoutsRef.current)) {
-        window.clearTimeout(timeoutId);
-      }
-      pendingTimeoutsRef.current = {};
-      for (const timeoutId of Object.values(suppressClickTimeoutsRef.current)) {
-        window.clearTimeout(timeoutId);
-      }
-      suppressClickTimeoutsRef.current = {};
-      suppressClickRef.current.clear();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!config) {
-      return;
-    }
-
-    const entityIds = config.rooms.flatMap((room) => room.lights.map((light) => normalizeLightConfig(light).entity_id));
-    if (entityIds.length === 0) {
-      return;
-    }
-
-    let reconnectTimer: number | null = null;
-    let stopped = false;
-
-    const connect = () => {
-      setStreamState("connecting");
-      const wsUrl = new URL(toWebSocketUrl(apiBaseUrl));
-      wsUrl.searchParams.set("api_key", apiKey);
-      wsUrl.searchParams.set("entity_ids", entityIds.join(","));
-
-      const socket = new WebSocket(wsUrl.toString());
-      webSocketRef.current = socket;
-      socket.onopen = () => setStreamState("live");
-
-      socket.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data) as { type: string; state: EntityStateResponse };
-          if (payload.type !== "state_changed") {
-            return;
-          }
-          setLightStates((previous) => ({
-            ...previous,
-            [payload.state.entity_id]: payload.state,
-          }));
-        } catch {
-          return;
-        }
-      };
-
-      socket.onclose = () => {
-        if (stopped) {
-          return;
-        }
-        setStreamState("reconnecting");
-        reconnectTimer = window.setTimeout(() => connect(), 2000);
-      };
-    };
-
-    connect();
-
-    return () => {
-      stopped = true;
-      if (reconnectTimer !== null) {
-        window.clearTimeout(reconnectTimer);
-      }
-      if (webSocketRef.current) {
-        webSocketRef.current.close();
-        webSocketRef.current = null;
-      }
-    };
-  }, [apiBaseUrl, apiKey, config]);
-
-  useEffect(() => {
-    function onPointerMove(event: PointerEvent) {
-      setDragState((previous) => {
-        if (!previous) {
-          return previous;
-        }
-        if (event.pointerId !== previous.pointerId) {
-          return previous;
-        }
-
-        const deltaY = previous.startY - event.clientY;
-        const deltaX = Math.abs(event.clientX - previous.startX);
-        const hasMovedEnough = Math.abs(deltaY) > DRAG_CANCEL_DISTANCE_PX || deltaX > DRAG_CANCEL_DISTANCE_PX;
-        const verticalIntent = Math.abs(deltaY) >= deltaX;
-
-        if (!previous.holdReady) {
-          if (hasMovedEnough) {
-            if (dragHoldTimerRef.current !== null) {
-              window.clearTimeout(dragHoldTimerRef.current);
-              dragHoldTimerRef.current = null;
-            }
-            clearActiveDragButtonTouchLock(previous.pointerId);
-            queueClickSuppression(previous.entityId);
-            return null;
-          }
-          return previous;
-        }
-
-        const shouldDrag = previous.isDragging || (hasMovedEnough && verticalIntent);
-
-        if (!shouldDrag) {
-          return previous;
-        }
-
-        if (event.cancelable) {
-          event.preventDefault();
-        }
-
-        const nextPct = clampPercent(previous.startBrightnessPct + deltaY / DRAG_PIXELS_PER_PERCENT);
-        if (!previous.isDragging) {
-          suppressClickRef.current.add(previous.entityId);
-        }
-
-        setDragBrightness((old) => ({ ...old, [previous.entityId]: nextPct }));
-        void sendBrightnessUpdate(previous.entityId, nextPct);
-        return { ...previous, isDragging: true, currentBrightnessPct: nextPct };
-      });
-    }
-
-    function finishDrag(event: PointerEvent) {
-      if (!dragState || event.pointerId !== dragState.pointerId) {
-        return;
-      }
-      if (dragHoldTimerRef.current !== null) {
-        window.clearTimeout(dragHoldTimerRef.current);
-        dragHoldTimerRef.current = null;
-      }
-      clearActiveDragButtonTouchLock(dragState.pointerId);
-      if (dragState.holdReady) {
-        queueClickSuppression(dragState.entityId);
-      }
-      if (dragState.holdReady && dragState.isDragging) {
-        const finalPct = dragState.currentBrightnessPct;
-        const entityId = dragState.entityId;
-        void client.setLightState(entityId, { is_on: true, brightness_pct: finalPct });
-        setLightStates((previous) => ({
-          ...previous,
-          [entityId]: {
-            ...(previous[entityId] ?? {
-              entity_id: entityId,
-              state: "on",
-              attributes: {},
-              last_changed: null,
-              last_updated: null,
-            }),
-            state: "on",
-            attributes: {
-              ...(previous[entityId]?.attributes ?? {}),
-              brightness_pct: finalPct,
-              brightness: Math.round((finalPct / 100) * 255),
-            },
-          },
-        }));
-      }
-      setDragState(null);
-    }
-
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", finishDrag);
-    window.addEventListener("pointercancel", finishDrag);
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", finishDrag);
-      window.removeEventListener("pointercancel", finishDrag);
-    };
-  }, [client, dragState]);
-
-  useEffect(() => {
-    function onTouchMove(event: TouchEvent) {
-      if (!dragState?.holdReady) {
-        return;
-      }
-      if (event.cancelable) {
-        event.preventDefault();
-      }
-    }
-
-    window.addEventListener("touchmove", onTouchMove, { passive: false });
-    return () => {
-      window.removeEventListener("touchmove", onTouchMove);
-    };
-  }, [dragState?.holdReady]);
-
-  async function toggleLight(lightId: string, isOn: boolean, timeoutSeconds?: number): Promise<void> {
     const targetState: "on" | "off" = isOn ? "off" : "on";
     const timeoutMs = Math.max(0, Math.round((timeoutSeconds ?? 0) * 1000));
 
@@ -649,6 +479,56 @@ export function LightingDashboard({
     } finally {
       setBusyEntityId(null);
     }
+  }, [client, clearPendingTransition, refreshLightState, clearClickSuppression]);
+
+  // Issue 2: stable pointerDown handler passed to memoized LightCard
+  const handleLightPointerDown = useCallback((
+    event: React.PointerEvent<HTMLButtonElement>,
+    light: NormalizedLight,
+    currentState: EntityStateResponse | undefined,
+    currentDragBrightness: number | undefined,
+    isDimmable: boolean,
+    isBusy: boolean,
+    isPending: boolean
+  ): void => {
+    if (isBusy || isPending || !isDimmable || !event.isPrimary || dragStateRef.current !== null) {
+      return;
+    }
+    activeDragButtonRef.current = event.currentTarget as HTMLButtonElement;
+    if (dragHoldTimerRef.current !== null) {
+      window.clearTimeout(dragHoldTimerRef.current);
+      dragHoldTimerRef.current = null;
+    }
+    const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
+    const meterSide: "left" | "right" = rect.right + 96 < window.innerWidth ? "right" : "left";
+    const currentPct = currentDragBrightness ?? brightnessPercentFromState(currentState);
+    setDragState({
+      entityId: light.entity_id,
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startX: event.clientX,
+      startBrightnessPct: currentPct,
+      currentBrightnessPct: currentPct,
+      holdReady: false,
+      isDragging: false,
+      meterSide,
+    });
+    dragHoldTimerRef.current = window.setTimeout(() => {
+      setDragState((previous) => {
+        if (!previous || previous.entityId !== light.entity_id) {
+          return previous;
+        }
+        suppressClickRef.current.add(previous.entityId);
+        enableActiveDragButtonTouchLock(previous.pointerId);
+        return { ...previous, holdReady: true };
+      });
+      dragHoldTimerRef.current = null;
+    }, DRAG_HOLD_DELAY_MS);
+  }, [setDragState, enableActiveDragButtonTouchLock]);
+
+  async function refreshAllStates(currentConfig: LightingConfig): Promise<void> {
+    const lights = currentConfig.rooms.flatMap((room) => room.lights.map((light) => normalizeLightConfig(light).entity_id));
+    await Promise.all(lights.map(async (lightId) => refreshLightState(lightId)));
   }
 
   async function setRoomLights(room: RoomLightingConfig, isOn: boolean): Promise<void> {
@@ -705,12 +585,250 @@ export function LightingDashboard({
     }
   }
 
-  function roomOnCount(room: RoomLightingConfig): number {
-    return room.lights.filter((light) => {
-      const entityId = normalizeLightConfig(light).entity_id;
-      return lightStates[entityId]?.state === "on";
-    }).length;
-  }
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const payload = await client.getLightingConfig();
+        if (cancelled) {
+          return;
+        }
+        setConfig(payload);
+        setConfigDraft(JSON.stringify(payload, null, 2));
+        await refreshAllStates(payload);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load lighting dashboard");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client]);
+
+  useEffect(() => {
+    return () => {
+      if (dragHoldTimerRef.current !== null) {
+        window.clearTimeout(dragHoldTimerRef.current);
+        dragHoldTimerRef.current = null;
+      }
+      clearActiveDragButtonTouchLock();
+      for (const timeoutId of Object.values(pendingTimeoutsRef.current)) {
+        window.clearTimeout(timeoutId);
+      }
+      pendingTimeoutsRef.current = {};
+      for (const timeoutId of Object.values(suppressClickTimeoutsRef.current)) {
+        window.clearTimeout(timeoutId);
+      }
+      suppressClickTimeoutsRef.current = {};
+      suppressClickRef.current.clear();
+    };
+  }, [clearActiveDragButtonTouchLock]);
+
+  useEffect(() => {
+    if (!config) {
+      return;
+    }
+
+    const entityIds = config.rooms.flatMap((room) => room.lights.map((light) => normalizeLightConfig(light).entity_id));
+    if (entityIds.length === 0) {
+      return;
+    }
+
+    let reconnectTimer: number | null = null;
+    let stopped = false;
+
+    const connect = () => {
+      setStreamState("connecting");
+      const wsUrl = new URL(toWebSocketUrl(apiBaseUrl));
+      wsUrl.searchParams.set("api_key", apiKey);
+      wsUrl.searchParams.set("entity_ids", entityIds.join(","));
+
+      const socket = new WebSocket(wsUrl.toString());
+      webSocketRef.current = socket;
+      socket.onopen = () => setStreamState("live");
+
+      socket.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data) as { type: string; state: EntityStateResponse };
+          if (payload.type !== "state_changed") {
+            return;
+          }
+          const { entity_id } = payload.state;
+          const newEntityState = payload.state;
+          setLightStates((previous) => ({
+            ...previous,
+            [entity_id]: newEntityState,
+          }));
+          // Issue 7: clear pending transition inline when target state is reached
+          setPendingTransitions((previous) => {
+            const pending = previous[entity_id];
+            if (!pending || pending.targetState !== newEntityState.state) {
+              return previous;
+            }
+            const timeoutId = pendingTimeoutsRef.current[entity_id];
+            if (timeoutId !== undefined) {
+              window.clearTimeout(timeoutId);
+              delete pendingTimeoutsRef.current[entity_id];
+            }
+            const next = { ...previous };
+            delete next[entity_id];
+            return next;
+          });
+        } catch {
+          return;
+        }
+      };
+
+      socket.onclose = () => {
+        if (stopped) {
+          return;
+        }
+        setStreamState("reconnecting");
+        reconnectTimer = window.setTimeout(() => connect(), 2000);
+      };
+    };
+
+    connect();
+
+    return () => {
+      stopped = true;
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer);
+      }
+      if (webSocketRef.current) {
+        webSocketRef.current.close();
+        webSocketRef.current = null;
+      }
+    };
+  }, [apiBaseUrl, apiKey, config]);
+
+  // Issue 1: effect no longer has dragState in deps — uses dragStateRef instead
+  useEffect(() => {
+    function onPointerMove(event: PointerEvent) {
+      setDragState((previous) => {
+        if (!previous) {
+          return previous;
+        }
+        if (event.pointerId !== previous.pointerId) {
+          return previous;
+        }
+
+        const deltaY = previous.startY - event.clientY;
+        const deltaX = Math.abs(event.clientX - previous.startX);
+        const hasMovedEnough = Math.abs(deltaY) > DRAG_CANCEL_DISTANCE_PX || deltaX > DRAG_CANCEL_DISTANCE_PX;
+        const verticalIntent = Math.abs(deltaY) >= deltaX;
+
+        if (!previous.holdReady) {
+          if (hasMovedEnough) {
+            if (dragHoldTimerRef.current !== null) {
+              window.clearTimeout(dragHoldTimerRef.current);
+              dragHoldTimerRef.current = null;
+            }
+            clearActiveDragButtonTouchLock(previous.pointerId);
+            queueClickSuppression(previous.entityId);
+            return null;
+          }
+          return previous;
+        }
+
+        const shouldDrag = previous.isDragging || (hasMovedEnough && verticalIntent);
+
+        if (!shouldDrag) {
+          return previous;
+        }
+
+        if (event.cancelable) {
+          event.preventDefault();
+        }
+
+        const nextPct = clampPercent(previous.startBrightnessPct + deltaY / DRAG_PIXELS_PER_PERCENT);
+        if (!previous.isDragging) {
+          suppressClickRef.current.add(previous.entityId);
+        }
+
+        setDragBrightness((old) => ({ ...old, [previous.entityId]: nextPct }));
+        void sendBrightnessUpdate(previous.entityId, nextPct);
+        return { ...previous, isDragging: true, currentBrightnessPct: nextPct };
+      });
+    }
+
+    function finishDrag(event: PointerEvent) {
+      // Issue 1: read from ref instead of closing over dragState state
+      const currentDragState = dragStateRef.current;
+      if (!currentDragState || event.pointerId !== currentDragState.pointerId) {
+        return;
+      }
+      if (dragHoldTimerRef.current !== null) {
+        window.clearTimeout(dragHoldTimerRef.current);
+        dragHoldTimerRef.current = null;
+      }
+      clearActiveDragButtonTouchLock(currentDragState.pointerId);
+      if (currentDragState.holdReady) {
+        queueClickSuppression(currentDragState.entityId);
+      }
+      if (currentDragState.holdReady && currentDragState.isDragging) {
+        const finalPct = currentDragState.currentBrightnessPct;
+        const entityId = currentDragState.entityId;
+        void client.setLightState(entityId, { is_on: true, brightness_pct: finalPct });
+        setLightStates((previous) => ({
+          ...previous,
+          [entityId]: {
+            ...(previous[entityId] ?? {
+              entity_id: entityId,
+              state: "on",
+              attributes: {},
+              last_changed: null,
+              last_updated: null,
+            }),
+            state: "on",
+            attributes: {
+              ...(previous[entityId]?.attributes ?? {}),
+              brightness_pct: finalPct,
+              brightness: Math.round((finalPct / 100) * 255),
+            },
+          },
+        }));
+      }
+      setDragState(null);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", finishDrag);
+    window.addEventListener("pointercancel", finishDrag);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", finishDrag);
+      window.removeEventListener("pointercancel", finishDrag);
+    };
+  }, [client, sendBrightnessUpdate, queueClickSuppression, clearActiveDragButtonTouchLock, setDragState]);
+
+  useEffect(() => {
+    function onTouchMove(event: TouchEvent) {
+      if (!dragState?.holdReady) {
+        return;
+      }
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+    }
+
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => {
+      window.removeEventListener("touchmove", onTouchMove);
+    };
+  }, [dragState?.holdReady]);
 
   if (loading) {
     return <div className="p-6 text-sm text-slate-700 dark:text-slate-300">Loading lighting dashboard...</div>;
@@ -800,170 +918,63 @@ export function LightingDashboard({
         </div>
       ) : (
         <div className="hp-room-grid mx-auto grid w-full max-w-6xl gap-2.5 sm:gap-5 xl:grid-cols-2">
-          {config.rooms.map((room) => (
-            <section
-              key={room.name}
-              className="hp-room-card rounded-2xl border border-slate-900/20 bg-white/92 p-3.5 shadow-lg shadow-slate-900/15 ring-1 ring-slate-900/5 backdrop-blur-sm dark:border-white/20 dark:bg-black/88 dark:shadow-black/70 dark:ring-white/10 sm:rounded-3xl sm:p-4"
-            >
-              {(() => {
-                const onCount = roomOnCount(room);
-                const anyOn = onCount > 0;
-                const roomHasPending = room.lights.some((light) => {
-                  const entityId = normalizeLightConfig(light).entity_id;
-                  return Boolean(pendingTransitions[entityId]);
-                });
+          {config.rooms.map((room) => {
+            // Issue 3 & 4: use memo lookups instead of per-render normalizeLightConfig calls
+            const onCount = roomOnCounts[room.name] ?? 0;
+            const anyOn = onCount > 0;
+            const roomHasPending = room.lights.some((light) => {
+              const entityId = typeof light === "string" ? light : light.entity_id;
+              return Boolean(pendingTransitions[entityId]);
+            });
 
-                return (
-              <div className="mb-2.5 flex items-center justify-between">
-                <h2 className="text-[1.15rem] font-semibold leading-none text-slate-900 dark:text-slate-100 sm:text-2xl">{room.name}</h2>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={roomHasPending}
-                    onClick={() => void setRoomLights(room, !anyOn)}
-                    className="rounded-md border border-slate-300/80 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-700 transition hover:border-amber-400 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-45 dark:border-white/15 dark:text-slate-300 dark:hover:border-amber-500 dark:hover:text-amber-300"
-                  >
-                    {anyOn ? "All Off" : "All On"}
-                  </button>
-                  <span className="hp-nonfunctional rounded-full bg-slate-500/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">
-                    {onCount}/{room.lights.length} on
-                  </span>
-                </div>
-              </div>
-                );
-              })()}
-
-              <div className="hp-light-grid grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
-                {room.lights.map((rawLight) => {
-                  const light = normalizeLightConfig(rawLight);
-                  const state = lightStates[light.entity_id];
-                  const isOn = state?.state === "on";
-                  const isBusy = busyEntityId === light.entity_id;
-                  const pending = pendingTransitions[light.entity_id];
-                  const isPending = Boolean(pending);
-                  const isDimmable = lightConfigByEntity[light.entity_id]?.dimmable === true;
-
-                  return (
+            return (
+              <section
+                key={room.name}
+                className="hp-room-card rounded-2xl border border-slate-900/20 bg-white/92 p-3.5 shadow-lg shadow-slate-900/15 ring-1 ring-slate-900/5 backdrop-blur-sm dark:border-white/20 dark:bg-black/88 dark:shadow-black/70 dark:ring-white/10 sm:rounded-3xl sm:p-4"
+              >
+                <div className="mb-2.5 flex items-center justify-between">
+                  <h2 className="text-[1.15rem] font-semibold leading-none text-slate-900 dark:text-slate-100 sm:text-2xl">{room.name}</h2>
+                  <div className="flex items-center gap-2">
                     <button
-                      key={light.entity_id}
                       type="button"
-                      disabled={isBusy || isPending}
-                      onPointerDown={(event) => {
-                        if (isBusy || isPending || !isDimmable || !event.isPrimary || dragState !== null) {
-                          return;
-                        }
-                        activeDragButtonRef.current = event.currentTarget as HTMLButtonElement;
-                        if (dragHoldTimerRef.current !== null) {
-                          window.clearTimeout(dragHoldTimerRef.current);
-                          dragHoldTimerRef.current = null;
-                        }
-                        const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
-                        const meterSide: "left" | "right" = rect.right + 96 < window.innerWidth ? "right" : "left";
-                        const currentPct = dragBrightness[light.entity_id] ?? brightnessPercentFromState(state);
-                        setDragState({
-                          entityId: light.entity_id,
-                          pointerId: event.pointerId,
-                          startY: event.clientY,
-                          startX: event.clientX,
-                          startBrightnessPct: currentPct,
-                          currentBrightnessPct: currentPct,
-                          holdReady: false,
-                          isDragging: false,
-                          meterSide,
-                        });
-                        dragHoldTimerRef.current = window.setTimeout(() => {
-                          setDragState((previous) => {
-                            if (!previous || previous.entityId !== light.entity_id) {
-                              return previous;
-                            }
-                            suppressClickRef.current.add(previous.entityId);
-                            enableActiveDragButtonTouchLock(previous.pointerId);
-                            return { ...previous, holdReady: true };
-                          });
-                          dragHoldTimerRef.current = null;
-                        }, DRAG_HOLD_DELAY_MS);
-                      }}
-                      onClick={() =>
-                        {
-                          if (suppressClickRef.current.has(light.entity_id)) {
-                            clearClickSuppression(light.entity_id);
-                            return;
-                          }
-                          void toggleLight(
-                            light.entity_id,
-                            isOn,
-                            lightConfigByEntity[light.entity_id]?.update_timeout_seconds,
-                          );
-                        }
-                      }
-                      className={`hp-light-row group relative flex h-14 w-full items-center gap-1.5 rounded-xl border px-3 text-left transition disabled:cursor-not-allowed disabled:opacity-55 ${
-                        isOn
-                          ? "border-amber-300/75 bg-amber-100/85 text-slate-900 ring-1 ring-amber-300/55 shadow-[0_0_20px_rgba(251,191,36,0.22)] dark:border-amber-500/55 dark:bg-amber-900/45 dark:text-amber-100 dark:ring-amber-500/25"
-                          : "border-slate-300/80 bg-slate-200/75 text-slate-700 hover:border-amber-300 hover:bg-amber-50/60 dark:border-white/10 dark:bg-[#0a0a0a]/95 dark:text-slate-300 dark:hover:border-amber-900 dark:hover:bg-[#0d0d0d]"
-                      }`}
-                      title={light.entity_id}
+                      disabled={roomHasPending}
+                      onClick={() => void setRoomLights(room, !anyOn)}
+                      className="rounded-md border border-slate-300/80 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-700 transition hover:border-amber-400 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-45 dark:border-white/15 dark:text-slate-300 dark:hover:border-amber-500 dark:hover:text-amber-300"
                     >
-                      <LightIcon
-                        icon={light.icon}
-                        className={`hp-light-icon h-5 w-5 shrink-0 transition sm:h-6 sm:w-6 ${
-                          isOn
-                            ? "text-slate-900 dark:text-amber-100"
-                            : "text-slate-400/70 dark:text-slate-600/80"
-                        }`}
-                      />
-                      <span className="block min-w-0 flex-1 text-sm font-medium leading-tight sm:text-[0.93rem]">
-                        <ScrollingLightName name={lightLabel(light, state)} />
-                      </span>
-                      {isDimmable ? (
-                        <span className="inline-flex h-3 w-3 shrink-0 items-center justify-center" title="Dimmable">
-                          <svg
-                            viewBox="0 0 16 16"
-                            className="h-3 w-3 text-cyan-600 dark:text-cyan-300 dark:drop-shadow-[0_0_6px_rgba(103,232,249,0.7)]"
-                            aria-hidden="true"
-                          >
-                            <circle
-                              cx="8"
-                              cy="8"
-                              r="5.5"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              pathLength="100"
-                              strokeDasharray="60 40"
-                              transform="rotate(95 8 8)"
-                            />
-                          </svg>
-                        </span>
-                      ) : null}
-                      {isPending ? (
-                        <span className="inline-flex shrink-0 items-center">
-                          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-500/45 border-t-slate-900 dark:border-slate-400/30 dark:border-t-slate-100" />
-                        </span>
-                      ) : null}
-                      {dragState?.entityId === light.entity_id && dragState.holdReady ? (
-                        <div
-                          className={`absolute top-1/2 z-20 h-28 w-10 -translate-y-1/2 rounded-xl border border-slate-300/80 bg-white p-1 shadow-lg dark:border-white/15 dark:bg-[#090909] ${
-                            dragState.meterSide === "right" ? "left-[calc(100%+0.35rem)]" : "right-[calc(100%+0.35rem)]"
-                          }`}
-                        >
-                          <div className="relative h-full w-full rounded-md bg-slate-200/80 dark:bg-slate-700/70">
-                            <div
-                              className="absolute bottom-0 left-0 right-0 rounded-md bg-amber-400/90"
-                              style={{ height: `${dragState.currentBrightnessPct}%` }}
-                            />
-                          </div>
-                          <div className="mt-1 text-center text-[9px] font-semibold text-slate-700 dark:text-slate-200">
-                            {dragState.currentBrightnessPct}%
-                          </div>
-                        </div>
-                      ) : null}
+                      {anyOn ? "All Off" : "All On"}
                     </button>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
+                    <span className="hp-nonfunctional rounded-full bg-slate-500/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-700 dark:text-slate-300">
+                      {onCount}/{room.lights.length} on
+                    </span>
+                  </div>
+                </div>
+
+                <div className="hp-light-grid grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
+                  {room.lights.map((rawLight) => {
+                    // Issue 3: look up from memo instead of calling normalizeLightConfig
+                    const entityId = typeof rawLight === "string" ? rawLight : rawLight.entity_id;
+                    const light = lightConfigByEntity[entityId];
+                    if (!light) return null;
+
+                    return (
+                      <LightCard
+                        key={entityId}
+                        light={light}
+                        state={lightStates[entityId]}
+                        isBusy={busyEntityId === entityId}
+                        isPending={Boolean(pendingTransitions[entityId])}
+                        isDimmable={light.dimmable === true}
+                        activeDrag={dragState?.entityId === entityId ? dragState : null}
+                        dragBrightness={dragBrightness[entityId]}
+                        onToggle={toggleLight}
+                        onPointerDown={handleLightPointerDown}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
 

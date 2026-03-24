@@ -1,4 +1,4 @@
-import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   EntityStateResponse,
@@ -9,6 +9,8 @@ import {
 import { UiDensity } from "../lib/uiDensity";
 import { ThemeMode } from "../lib/themeMode";
 import { DashboardTopBar } from "./DashboardTopBar";
+import { toWebSocketUrl } from "../lib/webSocket";
+import { ScrollingName } from "./ScrollingName";
 
 type RoomState = {
   loading: boolean;
@@ -20,14 +22,6 @@ type RoomState = {
 type RoomStateMap = Record<string, RoomState>;
 type StreamState = "connecting" | "live" | "reconnecting";
 
-function toWebSocketUrl(apiBaseUrl: string): string {
-  const parsed = new URL(apiBaseUrl);
-  parsed.protocol = parsed.protocol === "https:" ? "wss:" : "ws:";
-  parsed.pathname = "/api/ws/entities";
-  parsed.search = "";
-  return parsed.toString();
-}
-
 function toDisplayVolume(value: unknown): string {
   const asNumber = Number(value);
   if (!Number.isFinite(asNumber)) {
@@ -36,66 +30,174 @@ function toDisplayVolume(value: unknown): string {
   return `${Math.round(asNumber * 100)}%`;
 }
 
-function ScrollingRoomName({ name }: { name: string }) {
-  const containerRef = useRef<HTMLSpanElement | null>(null);
-  const textRef = useRef<HTMLSpanElement | null>(null);
-  const [overflowPx, setOverflowPx] = useState(0);
-  const [textWidthPx, setTextWidthPx] = useState(0);
+// --- RoomCard: memoized per-room card (Issues 2 & 5) ---
 
-  useEffect(() => {
-    function measure() {
-      const container = containerRef.current;
-      const text = textRef.current;
-      if (!container || !text) {
-        return;
-      }
-      const measuredTextWidth = Math.ceil(text.scrollWidth);
-      setTextWidthPx(measuredTextWidth);
-      setOverflowPx(Math.max(0, measuredTextWidth - container.clientWidth));
-    }
+type RoomCardProps = {
+  room: RoomAudioConfig;
+  roomState: RoomState | undefined;
+  index: number;
+  densityMode: UiDensity;
+  onSetSwitch: (room: RoomAudioConfig, isOn: boolean) => void;
+  onSetVolume: (room: RoomAudioConfig, value: number) => void;
+  onRefreshRoom: (room: RoomAudioConfig) => void;
+  onUpdateVolume: (roomName: string, numberEntityId: string, value: string) => void;
+};
 
-    measure();
-    const observer = new ResizeObserver(measure);
-    if (containerRef.current) {
-      observer.observe(containerRef.current);
-    }
-    if (textRef.current) {
-      observer.observe(textRef.current);
-    }
-    return () => observer.disconnect();
-  }, [name]);
+const RoomCard = memo(function RoomCard({
+  room,
+  roomState,
+  index,
+  densityMode,
+  onSetSwitch,
+  onSetVolume,
+  onRefreshRoom,
+  onUpdateVolume,
+}: RoomCardProps) {
+  const switchOn = roomState?.switchState?.state === "on";
+  const currentVolume = Number(roomState?.numberState?.state ?? 0);
+  const isMinimalist = densityMode === "minimalist";
 
-  const isTruncated = overflowPx > 0;
-  const style = (
-    isTruncated
-      ? {
-          ["--light-name-shift" as string]: `${Math.max(1, textWidthPx)}px`,
-          ["--light-name-duration" as string]: `${Math.max(2.2, textWidthPx / 52)}s`,
-        }
-      : {}
-  ) as CSSProperties;
+  if (isMinimalist) {
+    return (
+      <section
+        key={room.name}
+        className="hp-room-card animate-fade-up grid h-16 grid-cols-3 items-center gap-2 rounded-2xl border border-slate-900/20 bg-white/92 px-3 shadow-lg shadow-slate-900/15 ring-1 ring-slate-900/5 dark:border-white/20 dark:bg-black/88 dark:shadow-black/70 dark:ring-white/10"
+        style={{ animationDelay: `${index * 70}ms` }}
+      >
+        <button
+          type="button"
+          onClick={() => onSetSwitch(room, !switchOn)}
+          className="min-w-0 text-left text-base font-semibold leading-none text-slate-900 dark:text-slate-100"
+        >
+          <span className="block">
+            <ScrollingName name={room.name} />
+          </span>
+        </button>
+
+        {switchOn ? (
+          <div className="col-span-2 min-w-0">
+            <input
+              id={`volume-min-${room.name}`}
+              className="volume-slider"
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={Number.isFinite(currentVolume) ? currentVolume : 0}
+              onChange={(event) => {
+                onUpdateVolume(room.name, room.number, String(Number(event.target.value)));
+              }}
+              onPointerUp={(event) => onSetVolume(room, Number((event.target as HTMLInputElement).value))}
+            />
+          </div>
+        ) : (
+          <span className="col-span-2 justify-self-end text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+            Off
+          </span>
+        )}
+      </section>
+    );
+  }
+
+  if (!switchOn) {
+    return (
+      <button
+        key={room.name}
+        type="button"
+        onClick={() => onSetSwitch(room, true)}
+        className="hp-room-card animate-fade-up flex w-full flex-col rounded-2xl border border-slate-300/80 bg-slate-200/65 p-4 text-left shadow-lg shadow-slate-900/10 backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-slate-100/80 hover:shadow-glow dark:border-white/10 dark:bg-[#0a0a0a]/90 dark:shadow-black/70 dark:hover:border-cyan-900 dark:hover:bg-[#0d0d0d] sm:rounded-3xl sm:p-6"
+        style={{ animationDelay: `${index * 70}ms` }}
+      >
+        <div>
+          <h2 className="text-[2rem] font-semibold leading-none text-slate-900 dark:text-slate-100 sm:text-3xl">{room.name}</h2>
+          <p className="hp-nonfunctional mt-1.5 text-[11px] uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 sm:text-xs sm:tracking-[0.16em]">
+            {roomState?.loading ? "syncing" : "off"} · tap to turn on
+          </p>
+        </div>
+
+        <div className="hp-nonfunctional mt-4 text-[11px] uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
+          <span className="block max-w-full truncate" title={room.switch}>
+            {room.switch}
+          </span>
+        </div>
+
+        {roomState?.error ? (
+          <p className="mt-3 rounded-lg border border-red-300/70 bg-red-50/70 px-3 py-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
+            {roomState.error}
+          </p>
+        ) : null}
+      </button>
+    );
+  }
 
   return (
-    <span ref={containerRef} className={isTruncated ? "light-name-fade light-name-fade-both" : "light-name-fade"}>
-      {isTruncated ? (
-        <span style={style} className="light-name-scroll-track">
-          <span ref={textRef} className="light-name-copy">
-            {name}
-            {"\u00a0\u00a0"}
-          </span>
-          <span className="light-name-copy" aria-hidden="true">
-            {name}
-            {"\u00a0\u00a0"}
-          </span>
+    <section
+      key={room.name}
+      className="hp-room-card animate-fade-up flex flex-col rounded-2xl border border-slate-900/20 bg-white/92 p-4 shadow-lg shadow-slate-900/15 ring-1 ring-slate-900/5 backdrop-blur-sm dark:border-white/20 dark:bg-black/88 dark:shadow-black/70 dark:ring-white/10 sm:rounded-3xl sm:p-5"
+      style={{ animationDelay: `${index * 70}ms` }}
+    >
+      <div className="mb-3 flex items-start justify-between gap-3 sm:mb-4">
+        <div>
+          <h2 className="text-[2rem] font-semibold leading-none text-slate-900 dark:text-slate-100 sm:text-3xl">{room.name}</h2>
+          <p className="hp-nonfunctional mt-1 text-[11px] uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 sm:tracking-[0.16em]">
+            {roomState?.loading ? "syncing" : "ready"}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onSetSwitch(room, false)}
+          className="rounded-lg border border-slate-300/80 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-700 transition hover:border-rose-400 hover:text-rose-700 dark:border-white/15 dark:bg-black/70 dark:text-slate-200 dark:hover:border-rose-500 dark:hover:text-rose-300 sm:rounded-xl sm:px-3 sm:py-2 sm:text-xs sm:tracking-[0.16em]"
+        >
+          Turn Off
+        </button>
+      </div>
+
+      {roomState?.error ? (
+        <p className="mb-3 rounded-lg border border-red-300/70 bg-red-50/70 px-3 py-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
+          {roomState.error}
+        </p>
+      ) : null}
+
+      <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 dark:border-white/10 dark:bg-black/55 sm:rounded-2xl sm:p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <label htmlFor={`volume-${room.name}`} className="text-[11px] uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 sm:text-xs sm:tracking-[0.14em]">
+            Volume
+          </label>
+          <span className="text-lg font-semibold text-slate-900 dark:text-slate-100 sm:text-2xl">{toDisplayVolume(roomState?.numberState?.state)}</span>
+        </div>
+
+        <input
+          id={`volume-${room.name}`}
+          className="volume-slider"
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={Number.isFinite(currentVolume) ? currentVolume : 0}
+          onChange={(event) => {
+            onUpdateVolume(room.name, room.number, String(Number(event.target.value)));
+          }}
+          onPointerUp={(event) => onSetVolume(room, Number((event.target as HTMLInputElement).value))}
+        />
+      </div>
+
+      <div className="hp-nonfunctional mt-3 flex min-w-0 items-center justify-between gap-2 text-[11px] uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400 sm:mt-4 sm:tracking-[0.14em]">
+        <span className="min-w-0 max-w-[62%] truncate" title={room.switch}>
+          {room.switch}
         </span>
-      ) : (
-        <span ref={textRef} className="light-name-static">
-          {name}
-        </span>
-      )}
-    </span>
+        <button
+          type="button"
+          onClick={() => onRefreshRoom(room)}
+          className="rounded-xl border border-slate-300/80 px-3 py-1.5 font-semibold text-slate-600 transition hover:border-cyan-400 hover:text-cyan-700 dark:border-white/15 dark:bg-black/70 dark:text-slate-300 dark:hover:border-cyan-400 dark:hover:text-cyan-300"
+        >
+          Refresh
+        </button>
+      </div>
+    </section>
   );
-}
+});
+
+// --- MultiRoomAudioDashboard ---
 
 export function MultiRoomAudioDashboard({
   apiBaseUrl,
@@ -119,13 +221,82 @@ export function MultiRoomAudioDashboard({
   const [roomStates, setRoomStates] = useState<RoomStateMap>({});
   const [configError, setConfigError] = useState<string | null>(null);
   const [streamState, setStreamState] = useState<StreamState>("connecting");
-  const [masterVolume, setMasterVolume] = useState(0.5);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [configDraft, setConfigDraft] = useState('{\n  "rooms": []\n}');
   const [configSaveError, setConfigSaveError] = useState<string | null>(null);
   const [configSaving, setConfigSaving] = useState(false);
+  // Issue 6: local override state for slider responsiveness during drag
+  const [localMasterVolume, setLocalMasterVolume] = useState<number | null>(null);
   const webSocketRef = useRef<WebSocket | null>(null);
+
+  const refreshRoom = useCallback(async (room: RoomAudioConfig): Promise<void> => {
+    setRoomStates((previous) => ({
+      ...previous,
+      [room.name]: {
+        ...(previous[room.name] ?? {}),
+        loading: true,
+        error: undefined,
+      },
+    }));
+
+    try {
+      const [switchState, numberState] = await Promise.all([
+        client.getEntityState(room.switch),
+        client.getEntityState(room.number),
+      ]);
+
+      setRoomStates((previous) => ({
+        ...previous,
+        [room.name]: {
+          ...(previous[room.name] ?? {}),
+          loading: false,
+          switchState,
+          numberState,
+          error: undefined,
+        },
+      }));
+    } catch (error) {
+      setRoomStates((previous) => ({
+        ...previous,
+        [room.name]: {
+          ...(previous[room.name] ?? {}),
+          loading: false,
+          error: error instanceof Error ? error.message : "Failed to refresh room",
+        },
+      }));
+    }
+  }, [client]);
+
+  // Issue 5: stable callbacks passed to memoized RoomCard
+  const handleSetSwitch = useCallback(async (room: RoomAudioConfig, isOn: boolean): Promise<void> => {
+    await client.setSwitchState(room.switch, { is_on: isOn });
+    await refreshRoom(room);
+  }, [client, refreshRoom]);
+
+  const handleSetVolume = useCallback(async (room: RoomAudioConfig, value: number): Promise<void> => {
+    await client.setNumberValue(room.number, { value });
+    await refreshRoom(room);
+  }, [client, refreshRoom]);
+
+  const handleUpdateVolume = useCallback((roomName: string, numberEntityId: string, value: string): void => {
+    setRoomStates((previous) => ({
+      ...previous,
+      [roomName]: {
+        ...(previous[roomName] ?? { loading: false }),
+        numberState: {
+          ...(previous[roomName]?.numberState ?? {
+            entity_id: numberEntityId,
+            attributes: {},
+            last_changed: null,
+            last_updated: null,
+          }),
+          state: value,
+          entity_id: numberEntityId,
+        },
+      },
+    }));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -163,7 +334,7 @@ export function MultiRoomAudioDashboard({
     setRoomStates(initialState);
 
     void Promise.all(config.rooms.map(async (room) => refreshRoom(room)));
-  }, [config]);
+  }, [config, refreshRoom]);
 
   useEffect(() => {
     if (!config) {
@@ -243,54 +414,6 @@ export function MultiRoomAudioDashboard({
     };
   }, [apiBaseUrl, apiKey, config]);
 
-  async function refreshRoom(room: RoomAudioConfig): Promise<void> {
-    setRoomStates((previous) => ({
-      ...previous,
-      [room.name]: {
-        ...(previous[room.name] ?? {}),
-        loading: true,
-        error: undefined,
-      },
-    }));
-
-    try {
-      const [switchState, numberState] = await Promise.all([
-        client.getEntityState(room.switch),
-        client.getEntityState(room.number),
-      ]);
-
-      setRoomStates((previous) => ({
-        ...previous,
-        [room.name]: {
-          ...(previous[room.name] ?? {}),
-          loading: false,
-          switchState,
-          numberState,
-          error: undefined,
-        },
-      }));
-    } catch (error) {
-      setRoomStates((previous) => ({
-        ...previous,
-        [room.name]: {
-          ...(previous[room.name] ?? {}),
-          loading: false,
-          error: error instanceof Error ? error.message : "Failed to refresh room",
-        },
-      }));
-    }
-  }
-
-  async function setSwitch(room: RoomAudioConfig, isOn: boolean): Promise<void> {
-    await client.setSwitchState(room.switch, { is_on: isOn });
-    await refreshRoom(room);
-  }
-
-  async function setVolume(room: RoomAudioConfig, value: number): Promise<void> {
-    await client.setNumberValue(room.number, { value });
-    await refreshRoom(room);
-  }
-
   const onRooms = useMemo(() => {
     if (!config) {
       return [];
@@ -298,19 +421,22 @@ export function MultiRoomAudioDashboard({
     return config.rooms.filter((room) => roomStates[room.name]?.switchState?.state === "on");
   }, [config, roomStates]);
 
-  useEffect(() => {
+  // Issue 6: derive master volume with useMemo instead of useState + useEffect (eliminates double-render per WS tick)
+  const syncedMasterVolume = useMemo(() => {
     if (onRooms.length === 0) {
-      return;
+      return 0.5;
     }
     const currentVolumes = onRooms
       .map((room) => Number(roomStates[room.name]?.numberState?.state))
       .filter((value) => Number.isFinite(value));
     if (currentVolumes.length === 0) {
-      return;
+      return 0.5;
     }
-    const average = currentVolumes.reduce((sum, value) => sum + value, 0) / currentVolumes.length;
-    setMasterVolume(Math.max(0, Math.min(1, average)));
+    return Math.max(0, Math.min(1, currentVolumes.reduce((sum, value) => sum + value, 0) / currentVolumes.length));
   }, [onRooms, roomStates]);
+
+  // Use local override while slider is being dragged, otherwise show synced value
+  const masterVolume = localMasterVolume ?? syncedMasterVolume;
 
   async function applyMasterVolume(value: number): Promise<void> {
     if (onRooms.length === 0) {
@@ -449,8 +575,11 @@ export function MultiRoomAudioDashboard({
               step="0.01"
               value={masterVolume}
               disabled={bulkBusy || onRooms.length === 0}
-              onChange={(event) => setMasterVolume(Number(event.target.value))}
-              onPointerUp={(event) => void applyMasterVolume(Number((event.target as HTMLInputElement).value))}
+              onChange={(event) => setLocalMasterVolume(Number(event.target.value))}
+              onPointerUp={(event) => {
+                setLocalMasterVolume(null);
+                void applyMasterVolume(Number((event.target as HTMLInputElement).value));
+              }}
             />
           </div>
           <button
@@ -480,183 +609,19 @@ export function MultiRoomAudioDashboard({
         </div>
       ) : (
         <div className="hp-room-grid mx-auto grid w-full max-w-6xl gap-2.5 sm:gap-5 xl:grid-cols-2">
-          {config.rooms.map((room, index) => {
-            const roomState = roomStates[room.name];
-            const switchOn = roomState?.switchState?.state === "on";
-            const currentVolume = Number(roomState?.numberState?.state ?? 0);
-            const isMinimalist = densityMode === "minimalist";
-
-            if (isMinimalist) {
-              return (
-                <section
-                  key={room.name}
-                  className="hp-room-card animate-fade-up grid h-16 grid-cols-3 items-center gap-2 rounded-2xl border border-slate-900/20 bg-white/92 px-3 shadow-lg shadow-slate-900/15 ring-1 ring-slate-900/5 dark:border-white/20 dark:bg-black/88 dark:shadow-black/70 dark:ring-white/10"
-                  style={{ animationDelay: `${index * 70}ms` }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => void setSwitch(room, !switchOn)}
-                    className="min-w-0 text-left text-base font-semibold leading-none text-slate-900 dark:text-slate-100"
-                  >
-                    <span className="block">
-                      <ScrollingRoomName name={room.name} />
-                    </span>
-                  </button>
-
-                  {switchOn ? (
-                    <div className="col-span-2 min-w-0">
-                      <input
-                        id={`volume-min-${room.name}`}
-                        className="volume-slider"
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.01"
-                        value={Number.isFinite(currentVolume) ? currentVolume : 0}
-                        onChange={(event) => {
-                          const nextValue = Number(event.target.value);
-                          setRoomStates((previous) => ({
-                            ...previous,
-                            [room.name]: {
-                              ...(previous[room.name] ?? { loading: false }),
-                              numberState: {
-                                ...(previous[room.name]?.numberState ?? {
-                                  entity_id: room.number,
-                                  attributes: {},
-                                  last_changed: null,
-                                  last_updated: null,
-                                }),
-                                state: String(nextValue),
-                                entity_id: room.number,
-                              },
-                            },
-                          }));
-                        }}
-                        onPointerUp={(event) => void setVolume(room, Number((event.target as HTMLInputElement).value))}
-                      />
-                    </div>
-                  ) : (
-                    <span className="col-span-2 justify-self-end text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
-                      Off
-                    </span>
-                  )}
-                </section>
-              );
-            }
-
-            if (!switchOn) {
-              return (
-                <button
-                  key={room.name}
-                  type="button"
-                  onClick={() => void setSwitch(room, true)}
-                  className="hp-room-card animate-fade-up flex w-full flex-col rounded-2xl border border-slate-300/80 bg-slate-200/65 p-4 text-left shadow-lg shadow-slate-900/10 backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-slate-100/80 hover:shadow-glow dark:border-white/10 dark:bg-[#0a0a0a]/90 dark:shadow-black/70 dark:hover:border-cyan-900 dark:hover:bg-[#0d0d0d] sm:rounded-3xl sm:p-6"
-                  style={{ animationDelay: `${index * 70}ms` }}
-                >
-                  <div>
-                    <h2 className="text-[2rem] font-semibold leading-none text-slate-900 dark:text-slate-100 sm:text-3xl">{room.name}</h2>
-                    <p className="hp-nonfunctional mt-1.5 text-[11px] uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 sm:text-xs sm:tracking-[0.16em]">
-                      {roomState?.loading ? "syncing" : "off"} · tap to turn on
-                    </p>
-                  </div>
-
-                  <div className="hp-nonfunctional mt-4 text-[11px] uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
-                    <span className="block max-w-full truncate" title={room.switch}>
-                      {room.switch}
-                    </span>
-                  </div>
-
-                  {roomState?.error ? (
-                    <p className="mt-3 rounded-lg border border-red-300/70 bg-red-50/70 px-3 py-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
-                      {roomState.error}
-                    </p>
-                  ) : null}
-                </button>
-              );
-            }
-
-            return (
-              <section
-                key={room.name}
-                className="hp-room-card animate-fade-up flex flex-col rounded-2xl border border-slate-900/20 bg-white/92 p-4 shadow-lg shadow-slate-900/15 ring-1 ring-slate-900/5 backdrop-blur-sm dark:border-white/20 dark:bg-black/88 dark:shadow-black/70 dark:ring-white/10 sm:rounded-3xl sm:p-5"
-                style={{ animationDelay: `${index * 70}ms` }}
-              >
-                <div className="mb-3 flex items-start justify-between gap-3 sm:mb-4">
-                  <div>
-                    <h2 className="text-[2rem] font-semibold leading-none text-slate-900 dark:text-slate-100 sm:text-3xl">{room.name}</h2>
-                    <p className="hp-nonfunctional mt-1 text-[11px] uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 sm:tracking-[0.16em]">
-                      {roomState?.loading ? "syncing" : "ready"}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void setSwitch(room, false)}
-                    className="rounded-lg border border-slate-300/80 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-700 transition hover:border-rose-400 hover:text-rose-700 dark:border-white/15 dark:bg-black/70 dark:text-slate-200 dark:hover:border-rose-500 dark:hover:text-rose-300 sm:rounded-xl sm:px-3 sm:py-2 sm:text-xs sm:tracking-[0.16em]"
-                  >
-                    Turn Off
-                  </button>
-                </div>
-
-                {roomState?.error ? (
-                  <p className="mb-3 rounded-lg border border-red-300/70 bg-red-50/70 px-3 py-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
-                    {roomState.error}
-                  </p>
-                ) : null}
-
-                <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 dark:border-white/10 dark:bg-black/55 sm:rounded-2xl sm:p-4">
-                  <div className="mb-2 flex items-center justify-between">
-                    <label htmlFor={`volume-${room.name}`} className="text-[11px] uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 sm:text-xs sm:tracking-[0.14em]">
-                      Volume
-                    </label>
-                    <span className="text-lg font-semibold text-slate-900 dark:text-slate-100 sm:text-2xl">{toDisplayVolume(roomState?.numberState?.state)}</span>
-                  </div>
-
-                  <input
-                    id={`volume-${room.name}`}
-                    className="volume-slider"
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={Number.isFinite(currentVolume) ? currentVolume : 0}
-                    onChange={(event) => {
-                      const nextValue = Number(event.target.value);
-                      setRoomStates((previous) => ({
-                        ...previous,
-                        [room.name]: {
-                          ...(previous[room.name] ?? { loading: false }),
-                          numberState: {
-                            ...(previous[room.name]?.numberState ?? {
-                              entity_id: room.number,
-                              attributes: {},
-                              last_changed: null,
-                              last_updated: null,
-                            }),
-                            state: String(nextValue),
-                            entity_id: room.number,
-                          },
-                        },
-                      }));
-                    }}
-                    onPointerUp={(event) => void setVolume(room, Number((event.target as HTMLInputElement).value))}
-                  />
-                </div>
-
-                <div className="hp-nonfunctional mt-3 flex min-w-0 items-center justify-between gap-2 text-[11px] uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400 sm:mt-4 sm:tracking-[0.14em]">
-                  <span className="min-w-0 max-w-[62%] truncate" title={room.switch}>
-                    {room.switch}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => void refreshRoom(room)}
-                    className="rounded-xl border border-slate-300/80 px-3 py-1.5 font-semibold text-slate-600 transition hover:border-cyan-400 hover:text-cyan-700 dark:border-white/15 dark:bg-black/70 dark:text-slate-300 dark:hover:border-cyan-400 dark:hover:text-cyan-300"
-                  >
-                    Refresh
-                  </button>
-                </div>
-              </section>
-            );
-          })}
+          {config.rooms.map((room, index) => (
+            <RoomCard
+              key={room.name}
+              room={room}
+              roomState={roomStates[room.name]}
+              index={index}
+              densityMode={densityMode}
+              onSetSwitch={handleSetSwitch}
+              onSetVolume={handleSetVolume}
+              onRefreshRoom={refreshRoom}
+              onUpdateVolume={handleUpdateVolume}
+            />
+          ))}
         </div>
       )}
     </div>

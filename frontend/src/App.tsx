@@ -5,13 +5,7 @@ import { LightingDashboard } from "./components/LightingDashboard";
 import { MultiRoomAudioDashboard } from "./components/MultiRoomAudioDashboard";
 import { nextUiDensity, uiDensityLabel, UiDensity, useUiDensity } from "./lib/uiDensity";
 import { useThemeMode } from "./lib/themeMode";
-
-function normalizePath(pathname: string): string {
-  if (pathname === "/") {
-    return pathname;
-  }
-  return pathname.replace(/\/+$/, "");
-}
+import { normalizePath } from "./lib/normalizePath";
 
 function DashboardIndex({
   densityMode,
