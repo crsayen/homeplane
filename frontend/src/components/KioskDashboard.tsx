@@ -949,6 +949,19 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
         />
       )}
 
+      {/* Backyard camera — persistent fixed widget, bottom-right */}
+      <div className="fixed bottom-4 right-4 z-20 flex flex-col items-end gap-1">
+        <div className="text-[9px] uppercase tracking-[0.3em] text-white/30 font-semibold">Backyard</div>
+        <div className="rounded-xl overflow-hidden border border-white/15 bg-black shadow-xl" style={{ width: 320, height: 180 }}>
+          <iframe
+            src="https://monitor.ui.com/febd8761-157c-4018-ae62-cb8622de299a"
+            className="w-full h-full border-none"
+            allow="autoplay"
+            title="Backyard Camera"
+          />
+        </div>
+      </div>
+
       {/* Gear button (always visible, unobtrusive) */}
       <button
         type="button"
