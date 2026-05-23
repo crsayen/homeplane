@@ -975,6 +975,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
       {backyardOpen && (
         <div className="fixed inset-0 z-[51] bg-black flex items-center justify-center">
           <video
+            ref={(el) => { if (el) el.play().catch(() => {}); }}
             autoPlay
             muted
             playsInline
