@@ -966,9 +966,6 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
         />
       )}
 
-      {/* Backyard black backdrop — sits behind the video */}
-      {backyardOpen && <div className="fixed inset-0 z-40 bg-black" />}
-
       {/* Backyard video element — always connected, shown fullscreen when open */}
       <video
         ref={backyardStream.videoRef}
@@ -976,8 +973,9 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
         muted
         playsInline
         className={backyardOpen
-          ? "fixed inset-0 z-[41] w-full h-full object-contain"
+          ? "fixed z-[41] object-contain bg-black"
           : "fixed -top-[9999px] -left-[9999px] w-0 h-0"}
+        style={backyardOpen ? { top: 0, left: 0, right: 0, bottom: 0, width: "100%", height: "100%" } : undefined}
       />
 
       {/* Backyard close button */}
@@ -985,7 +983,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
         <button
           type="button"
           onClick={() => setBackyardOpen(false)}
-          className="fixed top-4 right-4 z-[42] rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition p-2"
+          className="fixed top-4 right-4 z-[42] rounded-full bg-black/60 hover:bg-black/80 text-white transition p-2"
           title="Close"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
