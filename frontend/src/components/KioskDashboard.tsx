@@ -422,9 +422,9 @@ const CamerasPanel = memo(function CamerasPanel({
   );
 });
 
-// Always-on fragmented MP4 stream from go2rtc. Stays connected so doorbell
-// video is instant when the doorbell rings. Reconnects automatically on error.
-function useDoorbellStream() {
+// Always-on fragmented MP4 stream from go2rtc. Keeps the connection warm so
+// video is instant when shown. Reconnects automatically on error.
+function useFmp4Stream(src: string) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [failed, setFailed] = useState(false);
   const retryTimer = useRef<number | null>(null);
@@ -446,7 +446,7 @@ function useDoorbellStream() {
 
     video.addEventListener("error", handleError);
     video.addEventListener("playing", handlePlaying);
-    video.src = "/go2rtc/api/stream.mp4?src=doorbell";
+    video.src = `/go2rtc/api/stream.mp4?src=${src}`;
     video.play().catch(() => {});
 
     cleanupRef.current = () => {
@@ -455,7 +455,7 @@ function useDoorbellStream() {
       video.src = "";
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [src]);
 
   useEffect(() => {
     connect();
@@ -467,6 +467,8 @@ function useDoorbellStream() {
 
   return { videoRef, failed };
 }
+
+function useDoorbellStream() { return useFmp4Stream("doorbell"); }
 
 function DoorbellOverlay({
   client,
@@ -874,8 +876,9 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
 
   const handleOpenRooms = useCallback(() => setRoomsOpen(true), []);
 
-  // Always-on WebRTC stream for doorbell — instant video when doorbell rings
+  // Always-on streams — pre-connected so video is instant when overlays open
   const doorbellStream = useDoorbellStream();
+  const backyardStream = useFmp4Stream("backyard");
 
   const handleSaveConfig = () => {
     setConfigSaveError(null);
@@ -963,25 +966,27 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
         />
       )}
 
-      {/* Backyard fullscreen overlay */}
+      {/* Backyard video element — always connected, shown fullscreen when open */}
+      <video
+        ref={backyardStream.videoRef}
+        autoPlay
+        muted
+        playsInline
+        className={backyardOpen
+          ? "fixed inset-0 z-40 w-full h-full object-contain bg-black"
+          : "fixed -top-[9999px] -left-[9999px] w-0 h-0"}
+      />
+
+      {/* Backyard close button */}
       {backyardOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black">
-          <button
-            type="button"
-            onClick={() => setBackyardOpen(false)}
-            className="absolute top-4 right-4 z-50 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition p-2"
-            title="Close"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-          <video
-            src="/go2rtc/api/stream.mp4?src=backyard"
-            autoPlay
-            muted
-            playsInline
-            className="w-full h-full object-contain"
-          />
-        </div>
+        <button
+          type="button"
+          onClick={() => setBackyardOpen(false)}
+          className="fixed top-4 right-4 z-[41] rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition p-2"
+          title="Close"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       )}
 
       {/* Camera buttons — bottom-right */}
