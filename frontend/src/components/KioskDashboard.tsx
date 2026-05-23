@@ -952,7 +952,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
 
       {/* Backyard fullscreen overlay */}
       {backyardOpen && (
-        <div className="fixed inset-0 z-40 flex flex-col bg-black">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black">
           <button
             type="button"
             onClick={() => setBackyardOpen(false)}
@@ -961,11 +961,12 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
-          <iframe
-            src="https://monitor.ui.com/febd8761-157c-4018-ae62-cb8622de299a"
-            className="w-full h-full border-none"
-            allow="autoplay"
-            title="Backyard Camera"
+          <video
+            src="/go2rtc/api/stream.mp4?src=backyard"
+            autoPlay
+            muted
+            playsInline
+            className="w-full h-full object-contain"
           />
         </div>
       )}

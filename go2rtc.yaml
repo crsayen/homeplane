@@ -1,6 +1,8 @@
 streams:
   doorbell:
     - rtsps://192.168.0.1:7441/GYYXLzvzWIb97ll1
+  backyard:
+    - rtsps://192.168.0.1:7441/BKkAYOE60W1zgpGM?enableSrtp
 
 webrtc:
   candidates:
