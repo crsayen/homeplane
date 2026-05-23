@@ -966,16 +966,14 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
         />
       )}
 
-      {/* Backyard video element — always connected, shown fullscreen when open */}
+      {/* Backyard video element — always connected and fullscreen, visibility-toggled */}
       <video
         ref={backyardStream.videoRef}
         autoPlay
         muted
         playsInline
-        className={backyardOpen
-          ? "fixed z-[51] object-contain bg-black"
-          : "fixed -top-[9999px] -left-[9999px] w-0 h-0"}
-        style={backyardOpen ? { top: 0, left: 0, right: 0, bottom: 0, width: "100%", height: "100%" } : undefined}
+        className="fixed z-[51] object-contain bg-black"
+        style={{ top: 0, left: 0, right: 0, bottom: 0, width: "100%", height: "100%", visibility: backyardOpen ? "visible" : "hidden", pointerEvents: backyardOpen ? "auto" : "none" }}
       />
 
       {/* Backyard close button */}
