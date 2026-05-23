@@ -633,6 +633,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
   const [configSaving, setConfigSaving] = useState(false);
   const [roomsOpen, setRoomsOpen] = useState(false);
   const [backyardOpen, setBackyardOpen] = useState(false);
+  const [doorbellOpen, setDoorbellOpen] = useState(false);
   const [configSaveError, setConfigSaveError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -893,17 +894,29 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
 
   return (
     <div className="h-screen w-screen overflow-hidden flex flex-col bg-[#0a0a0a] text-white">
-      {/* Doorbell video element — connected on-demand when doorbell rings */}
+      {/* Doorbell video element — always connected; shown when doorbell rings or manually opened */}
       <video
         ref={doorbellStream.videoRef}
         autoPlay
         muted
         playsInline
-        className={doorbellActive
+        className={(doorbellActive || doorbellOpen)
           ? "fixed z-[51] object-contain bg-black"
           : "fixed -top-[9999px] -left-[9999px] w-0 h-0"}
-        style={doorbellActive ? { top: "48px", left: 0, right: 0, bottom: 0, width: "100%", height: "calc(100% - 48px)" } : undefined}
+        style={(doorbellActive || doorbellOpen) ? { top: doorbellActive ? "48px" : 0, left: 0, right: 0, bottom: 0, width: "100%", height: doorbellActive ? "calc(100% - 48px)" : "100%" } : undefined}
       />
+
+      {/* Manual doorbell close button (shown when opened via button, not via ring) */}
+      {doorbellOpen && !doorbellActive && (
+        <button
+          type="button"
+          onClick={() => setDoorbellOpen(false)}
+          className="fixed top-4 right-4 z-[52] rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition p-2"
+          title="Close"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      )}
 
       {/* Doorbell takeover */}
       {doorbellActive && config && (
@@ -971,16 +984,27 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
         </div>
       )}
 
-      {/* Backyard camera button — bottom-right */}
-      <button
-        type="button"
-        onClick={() => setBackyardOpen(true)}
-        className="fixed bottom-4 right-4 z-20 flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 px-4 py-2.5 text-white/50 hover:text-white/80 transition shadow-xl"
-        title="Backyard Camera"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-        <span className="text-[0.75vw] font-semibold uppercase tracking-[0.2em]">Backyard</span>
-      </button>
+      {/* Camera buttons — bottom-right */}
+      <div className="fixed bottom-4 right-4 z-20 flex gap-2">
+        <button
+          type="button"
+          onClick={() => setDoorbellOpen(true)}
+          className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 px-4 py-2.5 text-white/50 hover:text-white/80 transition shadow-xl"
+          title="Doorbell Camera"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span className="text-[0.75vw] font-semibold uppercase tracking-[0.2em]">Doorbell</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setBackyardOpen(true)}
+          className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 px-4 py-2.5 text-white/50 hover:text-white/80 transition shadow-xl"
+          title="Backyard Camera"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          <span className="text-[0.75vw] font-semibold uppercase tracking-[0.2em]">Backyard</span>
+        </button>
+      </div>
 
       {/* Gear button (always visible, unobtrusive) */}
       <button
