@@ -105,7 +105,7 @@ const RoomCard = memo(function RoomCard({
         key={room.name}
         type="button"
         onClick={() => onSetSwitch(room, true)}
-        className="hp-room-card animate-fade-up flex w-full flex-col rounded-2xl border border-slate-300/80 bg-slate-200/65 p-4 text-left shadow-lg shadow-slate-900/10 backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-cyan-300 hover:bg-slate-100/80 hover:shadow-glow dark:border-white/10 dark:bg-[#0a0a0a]/90 dark:shadow-black/70 dark:hover:border-cyan-900 dark:hover:bg-[#0d0d0d] sm:rounded-3xl sm:p-6"
+        className="hp-room-card animate-fade-up flex w-full flex-col rounded-2xl border border-slate-300/80 bg-slate-200/90 p-4 text-left shadow-md transition hover:border-cyan-300 hover:bg-slate-100 dark:border-white/10 dark:bg-[#0a0a0a] dark:hover:border-cyan-900 dark:hover:bg-[#0d0d0d] sm:rounded-3xl sm:p-6"
         style={{ animationDelay: `${index * 70}ms` }}
       >
         <div>
@@ -133,7 +133,7 @@ const RoomCard = memo(function RoomCard({
   return (
     <section
       key={room.name}
-      className="hp-room-card animate-fade-up flex flex-col rounded-2xl border border-slate-900/20 bg-white/92 p-4 shadow-lg shadow-slate-900/15 ring-1 ring-slate-900/5 backdrop-blur-sm dark:border-white/20 dark:bg-black/88 dark:shadow-black/70 dark:ring-white/10 sm:rounded-3xl sm:p-5"
+      className="hp-room-card animate-fade-up flex flex-col rounded-2xl border border-slate-900/20 bg-white p-4 shadow-md dark:border-white/20 dark:bg-black sm:rounded-3xl sm:p-5"
       style={{ animationDelay: `${index * 70}ms` }}
     >
       <div className="mb-3 flex items-start justify-between gap-3 sm:mb-4">
@@ -207,14 +207,16 @@ export function MultiRoomAudioDashboard({
   resolvedTheme,
   densityMode,
   setDensityMode,
+  embedded = false,
 }: {
   apiBaseUrl: string;
   apiKey: string;
-  themeMode: ThemeMode;
-  setThemeMode: (next: ThemeMode | ((prev: ThemeMode) => ThemeMode)) => void;
-  resolvedTheme: "light" | "dark";
-  densityMode: UiDensity;
-  setDensityMode: (next: UiDensity | ((prev: UiDensity) => UiDensity)) => void;
+  themeMode?: ThemeMode;
+  setThemeMode?: (next: ThemeMode | ((prev: ThemeMode) => ThemeMode)) => void;
+  resolvedTheme?: "light" | "dark";
+  densityMode?: UiDensity;
+  setDensityMode?: (next: UiDensity | ((prev: UiDensity) => UiDensity)) => void;
+  embedded?: boolean;
 }) {
   const client = useMemo(() => new HomeplaneClient(apiBaseUrl, apiKey), [apiBaseUrl, apiKey]);
   const [config, setConfig] = useState<MultiRoomAudioConfig | null>(null);
@@ -488,29 +490,37 @@ export function MultiRoomAudioDashboard({
   }
 
   return (
-    <div className="hp-shell relative min-h-screen overflow-x-clip px-2.5 pb-6 pt-2.5 sm:px-6 sm:pb-10 sm:pt-4 lg:px-10">
-      <div className="ambient-bg hp-nonfunctional" />
+    <div
+      className={
+        embedded
+          ? "relative w-full px-2.5 pb-6 pt-2.5 sm:px-6 sm:pb-10 sm:pt-4 lg:px-10"
+          : "hp-shell relative min-h-screen overflow-x-clip px-2.5 pb-6 pt-2.5 sm:px-6 sm:pb-10 sm:pt-4 lg:px-10"
+      }
+    >
+      {embedded ? null : <div className="ambient-bg hp-nonfunctional" />}
 
-      <DashboardTopBar
-        currentDashboard="audio"
-        onOpenConfig={() => {
-          if (config) {
-            setConfigDraft(JSON.stringify(config, null, 2));
-          }
-          setConfigSaveError(null);
-          setEditorOpen(true);
-        }}
-        streamState={streamState}
-        themeMode={themeMode}
-        setThemeMode={setThemeMode}
-        resolvedTheme={resolvedTheme}
-        densityMode={densityMode}
-        setDensityMode={setDensityMode}
-      />
+      {embedded || !themeMode || !setThemeMode || !resolvedTheme || !densityMode || !setDensityMode ? null : (
+        <DashboardTopBar
+          currentDashboard="audio"
+          onOpenConfig={() => {
+            if (config) {
+              setConfigDraft(JSON.stringify(config, null, 2));
+            }
+            setConfigSaveError(null);
+            setEditorOpen(true);
+          }}
+          streamState={streamState}
+          themeMode={themeMode}
+          setThemeMode={setThemeMode}
+          resolvedTheme={resolvedTheme}
+          densityMode={densityMode}
+          setDensityMode={setDensityMode}
+        />
+      )}
 
-      {editorOpen ? (
+      {!embedded && editorOpen ? (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/55 p-3">
-          <div className="w-full max-w-3xl rounded-2xl border border-white/15 bg-[#0a0a0a] p-4 shadow-2xl shadow-black/60">
+          <div className="w-full max-w-3xl rounded-2xl border border-white/15 bg-[#0a0a0a] p-4 shadow-md">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-100">Audio Config Editor</h3>
               <button
@@ -552,7 +562,7 @@ export function MultiRoomAudioDashboard({
         </div>
       ) : null}
 
-      <section className="hp-global-card mx-auto mb-3 w-full max-w-6xl rounded-xl border border-white/40 bg-white/75 p-3 shadow-lg shadow-cyan-900/10 backdrop-blur-xl dark:border-white/10 dark:bg-black/80 sm:mb-5 sm:rounded-2xl sm:p-4">
+      <section className="hp-global-card mx-auto mb-3 w-full max-w-6xl rounded-xl border border-white/40 bg-white/95 p-3 shadow-md dark:border-white/10 dark:bg-black/95 sm:mb-5 sm:rounded-2xl sm:p-4">
         <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-600 dark:text-slate-300">
           <span>Global Controls</span>
           <span>{onRooms.length} On</span>
@@ -594,17 +604,17 @@ export function MultiRoomAudioDashboard({
       </section>
 
       {configError ? (
-        <div className="mx-auto w-full max-w-6xl rounded-2xl border border-red-300/70 bg-red-50/80 p-4 text-sm text-red-800 backdrop-blur dark:border-red-700/60 dark:bg-red-950/40 dark:text-red-200">
+        <div className="mx-auto w-full max-w-6xl rounded-2xl border border-red-300/70 bg-red-50 p-4 text-sm text-red-800 dark:border-red-700/60 dark:bg-red-950/60 dark:text-red-200">
           Config error: {configError}
         </div>
       ) : null}
 
       {!config ? (
-        <div className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-200/80 bg-white/75 p-6 text-sm text-slate-600 backdrop-blur dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-300">
+        <div className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-200/80 bg-white p-6 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
           Loading multi-room audio configuration...
         </div>
       ) : config.rooms.length === 0 ? (
-        <div className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-200/80 bg-white/75 p-6 text-sm text-slate-600 backdrop-blur dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-300">
+        <div className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-200/80 bg-white p-6 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
           No rooms configured yet. Open <span className="font-semibold">Config</span> to add rooms and save.
         </div>
       ) : (
@@ -615,7 +625,7 @@ export function MultiRoomAudioDashboard({
               room={room}
               roomState={roomStates[room.name]}
               index={index}
-              densityMode={densityMode}
+              densityMode={densityMode ?? "normal"}
               onSetSwitch={handleSetSwitch}
               onSetVolume={handleSetVolume}
               onRefreshRoom={refreshRoom}

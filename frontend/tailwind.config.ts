@@ -23,9 +23,6 @@ const config: Config = {
           600: "#0891b2",
         },
       },
-      boxShadow: {
-        glow: "0 0 0 1px rgba(34,211,238,0.25), 0 20px 35px -20px rgba(2,132,199,0.35)",
-      },
       keyframes: {
         "fade-up": {
           "0%": { opacity: "0", transform: "translateY(16px)" },

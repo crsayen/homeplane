@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EntityStateResponse, HomeplaneClient, KioskConfig, WeatherForecastItem } from "../api/homeplaneClient";
+import { MultiRoomAudioDashboard } from "./MultiRoomAudioDashboard";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -564,7 +565,7 @@ function ConfigEditor({
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/75">
-      <div className="w-full max-w-lg rounded-2xl border border-white/15 bg-[#111] p-6 shadow-2xl">
+      <div className="w-full max-w-lg rounded-2xl border border-white/15 bg-[#111] p-6 shadow-md">
         <h3 className="text-base font-semibold text-white mb-5">Kiosk Configuration</h3>
         <div className="flex flex-col gap-3">
           {fields.map(({ key, label, placeholder }) => (
@@ -934,9 +935,9 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
         />
       )}
 
-      {/* Rooms modal (multi-room audio page in iframe) */}
+      {/* Rooms modal — inline mount avoids a second React tree from an iframe */}
       {roomsOpen && (
-        <div className="fixed inset-0 z-40 flex flex-col bg-black">
+        <div className="fixed inset-0 z-40 flex flex-col bg-[#050505]">
           <div className="flex items-center justify-between px-6 py-3 border-b border-white/10 shrink-0">
             <span className="text-[1.4vw] font-bold text-white uppercase tracking-[0.3em]">Room Controls</span>
             <button
@@ -947,12 +948,9 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
               Close
             </button>
           </div>
-          <iframe
-            src="/dashboards/audio"
-            className="flex-1 w-full border-none bg-[#050505]"
-            title="Room Controls"
-            style={{ colorScheme: "dark" }}
-          />
+          <div className="flex-1 overflow-y-auto">
+            <MultiRoomAudioDashboard apiBaseUrl={apiBaseUrl} apiKey={apiKey} embedded />
+          </div>
         </div>
       )}
 
@@ -1004,7 +1002,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
         <button
           type="button"
           onClick={() => setDoorbellOpen(true)}
-          className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 px-4 py-2.5 text-white/50 hover:text-white/80 transition shadow-xl"
+          className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 px-4 py-2.5 text-white/50 hover:text-white/80 transition shadow-md"
           title="Doorbell Camera"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -1013,7 +1011,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
         <button
           type="button"
           onClick={() => setBackyardOpen(true)}
-          className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 px-4 py-2.5 text-white/50 hover:text-white/80 transition shadow-xl"
+          className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 px-4 py-2.5 text-white/50 hover:text-white/80 transition shadow-md"
           title="Backyard Camera"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>

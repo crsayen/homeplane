@@ -60,7 +60,7 @@ export function DashboardTopBar({
   }, []);
 
   return (
-    <header className="hp-header sticky top-2 z-20 mx-auto mb-3 flex w-full max-w-6xl items-center justify-between gap-2 rounded-xl border border-white/40 bg-white/75 p-2 shadow-lg shadow-cyan-900/10 backdrop-blur-xl dark:border-white/10 dark:bg-black/80 sm:top-3 sm:mb-6 sm:gap-3 sm:rounded-2xl sm:p-3">
+    <header className="hp-header sticky top-2 z-20 mx-auto mb-3 flex w-full max-w-6xl items-center justify-between gap-2 rounded-xl border border-white/40 bg-white/95 p-2 shadow-md dark:border-white/10 dark:bg-black/95 sm:top-3 sm:mb-6 sm:gap-3 sm:rounded-2xl sm:p-3">
       <nav className="flex min-w-0 items-center gap-1.5 sm:gap-2">
         <a href="/dashboards/audio" onClick={(e) => { e.preventDefault(); history.pushState(null, "", "/dashboards/audio"); dispatchEvent(new PopStateEvent("popstate")); }} className={navClass(currentDashboard === "audio")}>
           Audio
@@ -91,10 +91,10 @@ export function DashboardTopBar({
         </button>
         {menuOpen ? (
           <div
-            className={`absolute right-0 top-[calc(100%+0.35rem)] z-30 w-48 rounded-xl p-1.5 shadow-xl ${
+            className={`absolute right-0 top-[calc(100%+0.35rem)] z-30 w-48 rounded-xl p-1.5 shadow-md ${
               resolvedTheme === "dark"
-                ? "border border-white/20 bg-[#060606] shadow-black/55"
-                : "border border-slate-300/75 bg-white shadow-slate-900/20"
+                ? "border border-white/20 bg-[#060606]"
+                : "border border-slate-300/75 bg-white"
             }`}
           >
             <button

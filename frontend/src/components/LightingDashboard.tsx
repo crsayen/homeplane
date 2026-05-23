@@ -857,7 +857,7 @@ export function LightingDashboard({
 
       {editorOpen ? (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/55 p-3">
-          <div className="w-full max-w-3xl rounded-2xl border border-white/15 bg-[#0a0a0a] p-4 shadow-2xl shadow-black/60">
+          <div className="w-full max-w-3xl rounded-2xl border border-white/15 bg-[#0a0a0a] p-4 shadow-md">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-100">Lighting Config Editor</h3>
               <button
@@ -903,17 +903,17 @@ export function LightingDashboard({
       ) : null}
 
       {error ? (
-        <div className="mx-auto w-full max-w-6xl rounded-2xl border border-red-300/70 bg-red-50/80 p-4 text-sm text-red-800 backdrop-blur dark:border-red-700/60 dark:bg-red-950/40 dark:text-red-200">
+        <div className="mx-auto w-full max-w-6xl rounded-2xl border border-red-300/70 bg-red-50 p-4 text-sm text-red-800 dark:border-red-700/60 dark:bg-red-950/60 dark:text-red-200">
           {error}
         </div>
       ) : null}
 
       {!config ? (
-        <div className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-200/80 bg-white/75 p-6 text-sm text-slate-600 backdrop-blur dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-300">
+        <div className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-200/80 bg-white p-6 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
           Loading lighting configuration...
         </div>
       ) : config.rooms.length === 0 ? (
-        <div className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-200/80 bg-white/75 p-6 text-sm text-slate-600 backdrop-blur dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-300">
+        <div className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-200/80 bg-white p-6 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
           No lighting rooms configured yet. Open <span className="font-semibold">Config</span> to add rooms.
         </div>
       ) : (
@@ -930,7 +930,7 @@ export function LightingDashboard({
             return (
               <section
                 key={room.name}
-                className="hp-room-card rounded-2xl border border-slate-900/20 bg-white/92 p-3.5 shadow-lg shadow-slate-900/15 ring-1 ring-slate-900/5 backdrop-blur-sm dark:border-white/20 dark:bg-black/88 dark:shadow-black/70 dark:ring-white/10 sm:rounded-3xl sm:p-4"
+                className="hp-room-card rounded-2xl border border-slate-900/20 bg-white p-3.5 shadow-md dark:border-white/20 dark:bg-black sm:rounded-3xl sm:p-4"
               >
                 <div className="mb-2.5 flex items-center justify-between">
                   <h2 className="text-[1.15rem] font-semibold leading-none text-slate-900 dark:text-slate-100 sm:text-2xl">{room.name}</h2>
