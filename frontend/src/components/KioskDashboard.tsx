@@ -966,26 +966,28 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
         />
       )}
 
-      {/* Backyard video element — always connected and fullscreen, moved offscreen via transform when hidden */}
-      <video
-        ref={backyardStream.videoRef}
-        autoPlay
-        muted
-        playsInline
-        className="fixed z-[51] object-contain bg-black"
-        style={{ top: 0, left: 0, right: 0, bottom: 0, width: "100%", height: "100%", transform: backyardOpen ? "none" : "translateX(-9999px)", pointerEvents: backyardOpen ? "auto" : "none" }}
-      />
+      {/* Backyard keep-alive — tiny off-screen element just to hold the go2rtc connection open */}
+      <video ref={backyardStream.videoRef} autoPlay muted playsInline style={{ position: "fixed", top: -9999, left: -9999, width: 1, height: 1 }} />
 
-      {/* Backyard close button */}
+      {/* Backyard fullscreen overlay — fresh video element created on open */}
       {backyardOpen && (
-        <button
-          type="button"
-          onClick={() => setBackyardOpen(false)}
-          className="fixed top-4 right-4 z-[52] rounded-full bg-black/60 hover:bg-black/80 text-white transition p-2"
-          title="Close"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
+        <div className="fixed inset-0 z-[51] bg-black flex items-center justify-center">
+          <video
+            autoPlay
+            muted
+            playsInline
+            src="/go2rtc/api/stream.mp4?src=backyard"
+            className="w-full h-full object-contain"
+          />
+          <button
+            type="button"
+            onClick={() => setBackyardOpen(false)}
+            className="fixed top-4 right-4 z-[52] rounded-full bg-black/60 hover:bg-black/80 text-white transition p-2"
+            title="Close"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
       )}
 
       {/* Camera buttons — bottom-right */}
