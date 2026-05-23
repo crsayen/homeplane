@@ -632,6 +632,7 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
   const [configDraft, setConfigDraft] = useState<KioskConfig>(EMPTY_CONFIG);
   const [configSaving, setConfigSaving] = useState(false);
   const [roomsOpen, setRoomsOpen] = useState(false);
+  const [backyardOpen, setBackyardOpen] = useState(false);
   const [configSaveError, setConfigSaveError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -949,10 +950,17 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
         />
       )}
 
-      {/* Backyard camera — persistent fixed widget, bottom-right */}
-      <div className="fixed bottom-4 right-4 z-20 flex flex-col items-end gap-1">
-        <div className="text-[9px] uppercase tracking-[0.3em] text-white/30 font-semibold">Backyard</div>
-        <div className="rounded-xl overflow-hidden border border-white/15 bg-black shadow-xl" style={{ width: 320, height: 180 }}>
+      {/* Backyard fullscreen overlay */}
+      {backyardOpen && (
+        <div className="fixed inset-0 z-40 flex flex-col bg-black">
+          <button
+            type="button"
+            onClick={() => setBackyardOpen(false)}
+            className="absolute top-4 right-4 z-50 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition p-2"
+            title="Close"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
           <iframe
             src="https://monitor.ui.com/febd8761-157c-4018-ae62-cb8622de299a"
             className="w-full h-full border-none"
@@ -960,7 +968,18 @@ export function KioskDashboard({ apiBaseUrl, apiKey }: { apiBaseUrl: string; api
             title="Backyard Camera"
           />
         </div>
-      </div>
+      )}
+
+      {/* Backyard camera button — bottom-right */}
+      <button
+        type="button"
+        onClick={() => setBackyardOpen(true)}
+        className="fixed bottom-4 right-4 z-20 flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 px-4 py-2.5 text-white/50 hover:text-white/80 transition shadow-xl"
+        title="Backyard Camera"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+        <span className="text-[0.75vw] font-semibold uppercase tracking-[0.2em]">Backyard</span>
+      </button>
 
       {/* Gear button (always visible, unobtrusive) */}
       <button
